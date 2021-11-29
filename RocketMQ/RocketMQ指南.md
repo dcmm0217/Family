@@ -268,7 +268,8 @@ RocketMQ的路由发现采用的是**Pull模型**。当Topic路由信息出现�
 
 **客户端NameServer选择策略**
 
-这里的客户端指的是*Producer*与*Consumer*
+> 这里的客户端指的是*Producer*与*Consumer*
+>
 
 客户端在配置时必须要写上NameServer集群的地址，那么客户端到底连接的是哪个NameServer节点呢？客户端首先会生产一个随机数，然后再与NameServer节点数量取模，此时得到的就是所要连接的节点索引，然后就会进行连接。如果连接失败，则会采用round-robin策略，逐个尝试着去连接其它节点。
 
@@ -323,7 +324,118 @@ Broker节点集群是一个主从集群，即集群中具有Master与Slave两种
 
 Master与Slave 的对应关系是通过指定相同的BrokerName、不同的BrokerId 来确定的
 
-**BrokerId为0表 示Master，非0表示Slave。每个Broker与NameServer集群中的所有节点建立长连接，定时注册Topic信**
+**BrokerId为0表 示Master，非0表示Slave。每个Broker与NameServer集群中的所有节点建立长连接，定时注册Topic信息到所有NameServer**。
 
-**息到所有NameServer**。
+#### 5、工作流程
+
+1、启动NameServer，NameServer会开始监听所有端口，等待Broker、Producer、Consumer连接
+
+2、启动Broker时，Broker会与所有的NameServer建立并保持长连接，然后每30s向NameServer定时发送心跳包
+
+3、发送消息前，先创建Topic，创建Topic时需要指定该Topic要存储在哪些Broker上，当然，在创建Topic时，也会将Topic与NameServer的关系写入到NameServer。不过，这步是可选的，也可以在发送消息时自动创建Topic
+
+4、Producer发送消息，启动时先跟NameServer集群中的其中一台建立**长连接**，并从NameServer中获取路由信息，即当前发送的Topic消息的Queue与Broker的地址（IP+Port）的映射关系。然后**根据算法策略从队列**选择一个Queue，与队列所在的Broker建立长连接从而向Broker发送消息。当然，**在获取到路由信息后，Producer会首先将路由信息缓存到本地，再每30s从NameServer更新一次路由信息**。
+
+5、Consumer跟Producer类似，跟其中一台NameServer建立长连接，获取其所订阅Topic的路由信息，然后根据**算法策略从路由信息中获取到其所要消费的Queue**，然后直接跟**Broker建立长连接**，**开始消费其中的消息**。Consumer在获取到路由信息后，**同样也会每30s从NameServer更新一次路由信息**。不过不同于Producer的是，Consumer还会向Broker发送心跳，以确保Broker的存活状态。
+
+**Topic的创建模式**
+
+手动创建Topic时，有两种模式：
+
+- 集群模式：该模式下创建的Topic在该集群中，所有Broker中的Queue数量可以是相同的
+- Broker模式：该模式下创建的Topic在该集群中，每个Broker中的Queue数量可以不同
+
+自动创建Topic时，默认采用的是Broker模式，会为每个Broker默认创建4个Queue。
+
+**读/写队列**
+
+从物理上来讲，读/写队列是同一个队列。所以，不存在读/写队列数据同步问题。读/写队列是逻辑卷上进行区分的概念。一**般情况下，读/写队列数量是相同的**。
+
+```
+例如，创建Topic时设置的写队列数量为8，读队列数量为4，此时系统会创建8个Queue，分别是0 1 2 3 4 5 6 7。Producer会将消息写入到这8个队列，但Consumer只会消费0 1 2 3这4个队列中的消息，4 5 6 7中的消息是不会被消费到的。
+
+再如，创建Topic时设置的写队列数量为4，读队列数量为8，此时系统会创建8个Queue，分别是0 1 2 3 4 5 6 7。Producer会将消息写入到0 1 2 3 这4个队列，但Consumer只会消费0 1 2 3 4 5 6 7这8个队列中的消息，但是4 5 6 7中是没有消息的。此时假设Consumer Group中包含两个Consuer，Consumer1消 费0 1 2 3，而Consumer2消费4 5 6 7。但实际情况是，Consumer2是没有消息可消费的。
+
+也就是说，当读/写队列数量设置不同时，总是有问题的。那么，为什么要这样设计呢？
+
+例如，原来创建的Topic中包含16个Queue，如何能够使其Queue缩容为8个，还不会丢失消息？可以动态修改写队列数量为8，读队列数量不变。此时新的消息只能写入到前8个队列，而消费都消费的却是16个队列中的数据。当发现后8个Queue中的消息消费完毕后，就可以再将读队列数量动态设置为8。整个缩容过程，没有丢失任何消息。
+
+其这样设计的目的是为了，方便Topic的Queue的缩容。
+
+perm用于设置对当前创建Topic的操作权限：2表示只写，4表示只读，6表示读写。
+```
+
+
+
+### 三、单机安装与启动
+
+#### 1、准备工作
+
+**软硬件要求**
+
+系统要求是64位的，JDK要求是1.8及其以上版本的
+
+![image-20211129120046169](https://gitee.com/huangwei0123/image/raw/master/img/image-20211129120046169.png)
+
+**下载RocketMQ安装包**
+
+![image-20211129120121396](https://gitee.com/huangwei0123/image/raw/master/img/image-20211129120121396.png)
+
+将下载的安装包上传到Linux、解压
+
+![image-20211129120138200](https://gitee.com/huangwei0123/image/raw/master/img/image-20211129120138200.png)
+
+#### 2、修改初始化内存
+
+修改runserver.sh
+
+使用vim命令打开bin\runserver.sh文件
+
+![image-20211129142931044](https://gitee.com/huangwei0123/image/raw/master/img/image-20211129142931044.png)
+
+修改runbroker.sh
+
+使用vim命令打开bin\runbroker.sh文件
+
+![image-20211129143010391](https://gitee.com/huangwei0123/image/raw/master/img/image-20211129143010391.png)
+
+#### 3、启动
+
+启动NameServer
+
+```shell
+nohup sh bin/mqnamesrv & 
+tail -f ~/logs/rocketmqlogs/namesrv.log
+```
+
+![image-20211129143256196](https://gitee.com/huangwei0123/image/raw/master/img/image-20211129143256196.png)
+
+启动broker
+
+```shell
+nohup sh bin/mqbroker -n localhost:9876 & 
+tail -f ~/logs/rocketmqlogs/broker.log
+```
+
+![image-20211129143446613](https://gitee.com/huangwei0123/image/raw/master/img/image-20211129143446613.png)
+
+#### 4、测试
+
+发送消息
+
+```sh
+export NAMESRV_ADDR=localhost:9876 sh bin/tools.sh org.apache.rocketmq.example.quickstart.Producer
+```
+
+接收消息
+
+```sh
+sh bin/tools.sh org.apache.rocketmq.example.quickstart.Consumer
+```
+
+#### 5、关闭Server
+
+无论是nameserver还是borker，都是使用bin/mqshutdown命令。
+
+![image-20211129144429084](https://gitee.com/huangwei0123/image/raw/master/img/image-20211129144429084.png)
 
