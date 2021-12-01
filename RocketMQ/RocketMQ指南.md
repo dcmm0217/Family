@@ -439,3 +439,307 @@ sh bin/tools.sh org.apache.rocketmq.example.quickstart.Consumer
 
 ![image-20211129144429084](https://gitee.com/huangwei0123/image/raw/master/img/image-20211129144429084.png)
 
+### 四、控制台的安装与启动
+
+RocketMQ有一个可视化的dashboard，通过该控制台可以直观的查看到很多数据。
+
+下载地址：https://github.com/apache/rocketmq-externals/releases 
+
+![image-20211130110452263](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130110452263.png)
+
+**修改配置**
+
+修改其src/main/resource中的application.properties配置文件
+
+- 原来的端口号为8080，修改为一个不常用的端口
+- 指定RocketMQ的NameServer的地址
+
+![image-20211130110947507](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130110947507.png)
+
+**添加依赖**
+
+在解压目录rocketmq-console的pom.xml中添加如下JAXB依赖。
+
+> *JAXB*，*Java Architechture for Xml Binding*，用于*XML*绑定的*Java*技术，是一个业界标准，是一 项可以根据*XML Schema*生成*Java*类的技术。 
+
+```xml
+<dependency> 
+    <groupId>javax.xml.bind</groupId> 
+    <artifactId>jaxb-api</artifactId> 
+    <version>2.3.0</version> 
+</dependency> 
+<dependency> 
+    <groupId>com.sun.xml.bind</groupId> 
+    <artifactId>jaxb-impl</artifactId> 
+    <version>2.3.0</version> 
+</dependency> 
+<dependency> 
+    <groupId>com.sun.xml.bind</groupId> 
+    <artifactId>jaxb-core</artifactId> 
+    <version>2.3.0</version> 
+</dependency> 
+<dependency> 
+    <groupId>javax.activation</groupId> 
+    <artifactId>activation</artifactId> 
+    <version>1.1.1</version> 
+</dependency>
+```
+
+**重新打包**
+
+在rocketmq-console目录下运行maven的打包命令。
+
+```sh
+mvn clean package -Dmaven.test.skip=true
+```
+
+![image-20211130111233214](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130111233214.png)
+
+**启动**
+
+![image-20211130111253212](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130111253212.png)
+
+```
+java -jar rocketmq-console-ng-1.0.0.jar
+```
+
+**访问**
+
+![image-20211130111336387](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130111336387.png)
+
+### 五、集群搭建理论
+
+![image-20211130111418709](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130111418709.png)
+
+#### 1、数据复制与刷盘策略
+
+![image-20211130112438093](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130112438093.png)
+
+**复制策略**
+
+复制策略是Broker的Master与Slave间的数据同步方式。分为**同步复制**和**异步复制**
+
+- 同步复制：消息写入Master后，Master会等待slave同步数据成功后才向producer返回成功ACK
+- 异步复制：消息写入Master后，master立即向producer返回成功ACK，无需等待salve同步数据成功
+
+> 异步复制策略会降低系统的写入延迟，*RT*（Return Time）变小，提高了系统的吞吐量
+
+**刷盘策略**
+
+刷盘策略指的是Broker中消息的**落盘**方式，即消息发送到**broker内存**后**持久化到磁盘**的方式。分为同步刷盘和异步刷盘：
+
+- 同步刷盘：当消息持久化到broker的磁盘后才算是消息写入成功
+- 异步刷盘：当消息写入到broker内存后即表示消息写入成功，无需等待消息持久化到磁盘
+
+> 1、异步刷盘策略会降低系统的写入延迟，RT变小，提高系统的吞吐量
+>
+> 2、消息写入到Broker的内存，一般是写入到了PageCache
+>
+> 3、对于异步刷盘策略，消息会写入到PageCache后立即返回成功ACK，但不会立即做落盘操作，而是当PageCache到达一定量时会自动进行落盘
+
+#### 2、Broker集群模式
+
+根据Broker集群中各个节点间关系的不同，Broker集群可以分为一下几类：
+
+**单Master**
+
+只有一个broker（其本质不能叫集群），这种方式也只能在测试时使用，生产环境下不能使用，因为存在单点问题。
+
+**多Master**
+
+broker集群仅由多个master构成，不存在slave。同一个Topic的各个Queue会平均分布在各个master节点上。
+
+- 优点：配置简单，单个master宕机或重启维护对应用无影响，在磁盘配置为RAID10时，即使机器宕机不可恢复的情况下，由于RAID10磁盘非常可靠，消息也不会丢（异步刷盘丢失少量消息，同步刷盘一条不丢）性能最高
+- 缺点：单台机器宕机期间，这台机器上未被消费的消息在机器恢复之前不可订阅（不可消费），消息实时性会受到影响。
+
+> 以上优点的前提是，这些Master都配置了RAID磁盘阵列，如果没有配置，一旦出现某Master宕机，则会发送大量消息丢失的情况
+
+**多Master多Slave模式-异步复制**
+
+broker集群由多个master构成，每个master又配置多哥slave（在配置了RAID磁盘阵列的情况下，一个master一般配置一个slave即可）。master与slave的关系是**主备关系**，**即master负责处理消息的读写请求，而slave仅负责消息的备份与master宕机后的角色切换**。
+
+**异步复制**即前面讲的 `复制策略`中的 `异步复制策略`,即消息写入master成功后，master立即向producer返回成功ACK，无需等待slave同步数据成功。
+
+该模式的最大特点之一是，当master宕机后slave能够 `自动切换` 为master。不过由于slave从master的同步具有短暂的延迟（毫秒级），所以**当master宕机后，这种异步复制方式可能会存在少量消息的丢失问题。**
+
+> slave 从master同步的延迟越短，其可能丢失的消息就越少
+>
+> 对于master的RAID磁盘阵列，若使用的也是异步复制策略，同样也存在延迟问题，同样也可能会丢失消息。但RAID阵列的秘诀是微秒级的（因为是由硬盘支持的），所以其丢失的数据量也会更少。
+
+
+
+**多Master多Slave模式-同步双写**
+
+该模式是`多Master多Slave模式`的`同步复制`实现。所谓`同步双写`,指的是消息写入master成功后，master会等待slave同步数据成功后才向producer返回成功ACK，即master与slave都要写入成功后才会返回成功ACK,也即`双写`
+
+该模式与`异步复制模式`相比，优点事消息的安全性更高，不存在消息丢失的情况，但是单个消息的RT略高，从而导致性能要略低（**大约低10%**）
+
+该模式存在一个大的问题：对于目前版本，master宕机后，slave`不会自动切换`到master
+
+#### 最佳实践
+
+**一般会为Master配置RAID10磁盘阵列，然后再为其配置一个Slave，即利用了RAID10磁盘阵列的高效、安全性、又解决了可能会影响订阅的问题。**
+
+> 1、RAID磁盘阵列的效率要高于Master-Slave集群，因为RAID是硬件支持的。也是正因为如此，所以搭建RAID的成本较高。
+>
+> 2、多Master+RAID阵列，与多Master多Slave集群的区别是什么？
+>
+> - 多master+RAID阵列，其仅仅可以保证数据不丢失，即不影响消息写入，但其可能会影响到消息的订阅。但其执行效率要远高于`多master多slave集群`
+> - 多master多slave集群，其不仅可以保证数据不丢失，也不会影响消息写入。其运行效率要低于`多master+RAID阵列`
+
+#### RAID10
+
+![image-20211130152844972](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130152844972.png)
+
+RAID10是一个RAID1与RAID10的组合体，所以它继承了RAID0的快速和RAID1的安全
+
+简单来说就是，先做`条带`,再做`镜像`。发即将进来的数据先分散到不同的磁盘，再讲磁盘中的数据做镜像。
+
+
+
+### 六、集群搭建实战
+
+**1、集群架构**
+
+这里要搭建一个双主双从异步复制的Broker集群。为了方便，这里使用了两台主机来完成集群的搭建。
+
+![image-20211130154042449](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130154042449.png)
+
+2、克隆生成rocketmqOS1
+
+克隆rocketmqOS主机，并修改配置，指定主机名为rocketmqOS1
+
+3、修改rocketmqOS1配置文件
+
+要修改的配置文件在rocketMQ解压目录的conf/2m-2s-async目录中
+
+![image-20211130154154465](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130154154465.png)
+
+**修改broker-a.properties**
+
+将该配置文件内容修改如下：
+
+![image-20211130154407261](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130154407261.png)
+
+**修改broker-b-s.properties**
+
+将该配置文件内容修改为如下：
+
+![image-20211130154621990](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130154621990.png)
+
+其他配置
+
+除了以上配置外，这些配置文件中还可以设置其他属性
+
+![image-20211130155202290](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130155202290.png)
+
+**4、克隆生成rocketmqOS2**
+
+克隆rocketmqOS1主机，并修改配置。指定主机名为rocketmqOS2。
+
+5、修改rocketmqOS2配置文件
+
+对于rocketmqOS2主机，同样需要修改rocketMQ解压目录的conf目录2m-2s-async中的两个配置文件。
+
+**修改broker-b.properties**
+
+将该配置文件内容修改如下：
+
+```properties
+brokerClusterName=DefaultCluster
+brokerName=broker-b
+brokerId=0
+deleteWhen=04
+fileReservedTime=48
+brokerRole=ASYNC_MASTER
+flushDiskType=ASYNC_FLUSH
+namesrvAddr=192.168.59.164:9876;192.168.59.165:9876
+```
+
+**修改broker-a-s.properties**
+
+将该配置文件内容修改为如下：
+
+![image-20211130155504685](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130155504685.png)
+
+6、启动服务器
+
+**启动NameServer集群**
+
+分别启动rocketmqOS1与rocketmqOS2两个主机中NameServer。
+
+启动命令完全相同
+
+```sh
+nohup sh bin/mqnamesrv & 
+tail -f ~/logs/rocketmqlogs/namesrv.log
+```
+
+**启动两个Master**
+
+分别启动rocketmqOS1与rocketmqOS2两个主机中的broker master。注意，它们指定索要加载的配置文件时不同的。
+
+```sh
+nohup sh bin/mqbroker -c conf/2m-2s-async/broker-a.properties &
+tail -f ~/logs/rocketmqlogs/broker.log
+```
+
+```sh
+nohup sh bin/mqbroker -c conf/2m-2s-async/broker-b.properties &
+tail -f ~/logs/rocketmqlogs/broker.log
+```
+
+**启动两个Slave**
+
+分别启动rocketmqOS1与rocketmqOS2两个主机中的broker salve。注意，他们指定的所要加载的配置文件时不同的。
+
+```sh
+nohup sh bin/mqbroker -c conf/2m-2s-async/broker-b-s.properties & 
+tail -f ~/logs/rocketmqlogs/broker.log
+```
+
+```sh
+nohup sh bin/mqbroker -c conf/2m-2s-async/broker-a-s.properties & 
+tail -f ~/logs/rocketmqlogs/broker.log
+```
+
+### 七、mqadmin命令
+
+**修改bin/tools.sh**
+
+在运行mqadmin命令之前，先要修改mq解压目录下bin\tools.sh配置的JDK的ext目录，本机的ext目录在/usr/java/jdk1.8.0_161/jre/lib/etx
+
+使用vim命令打开tools.sh文件，并在JAVA_OPT配置的—Djava.ext.dirs这一行后面添加ext的路径
+
+![image-20211130160259044](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130160259044.png)
+
+**运行mqadmin**
+
+直接运行该命令，可以看到其可以添加的commands。通过这些commands可以完成很多的功能。
+
+**该命令的官网详解**
+
+该命令在官网中有详细的用法解释
+
+https://github.com/apache/rocketmq/blob/master/docs/cn/operation.md
+
+
+
+## 第3章 RocketMQ工作原理
+
+## 一、消息的生产
+
+#### 1、消息生产过程
+
+Producer可以将消息写入到某Broker中的某Queue中，其经历了如下过程
+
+- Producer发送消息之前，会先向NameServer发出获取`消息Topic的路由信息`的请求
+- NameServer返回该Topic的`路由表`和`Broker列表`
+- Producer根据代码中指定的`Queue选择策略`，从Queue列表中选择一个队列，用于后续存储消息
+- Producer对消息做出一些特殊处理，例如:消息本身超过4M，则会对其进行压缩
+- Producer向选择出的Queue所在的Broker发出`RPC请求`，将消息发送到选择出的Queue
+
+> 路由表：实际上是一个Map。key为Topic名称，value是一个QueueData实例列表。QueueData并不是一个Queue对应一个QueueData，而是一个Broker中该Topic的所有Queue对应一个QueueData。即，只要涉及到该Topic的Broker，一个Broker对应一个QueueData。QueueData中包含brokerName。
+>
+> 简单来说，路由表的key为topic名称，value则为所有涉及该Topic的BrokerName列表
+
