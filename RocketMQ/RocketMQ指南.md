@@ -785,3 +785,310 @@ index：其中存放着消息索引文件indexFile
 
 lock：运行期间使用到的全局资源锁
 
+#### 1、commitlog文件
+
+> 说明：在很多资料中commitlog目录中得文件简称为commitlog文件，但在源码中，该文件被命名为mappedFile
+
+**目录与文件**
+
+commitlog目录存放着很多得到mappedFile文件，当前Borker中得所有消息都是落盘到这些mappedFile文件中的。mappedFile文件大小为1G(大小等于1G),文件名由20位十进制书构成，表示当前文件的第一条消息的起始位偏移量。
+
+> 第一个文件名一定是20位0构成的，因为第一个文件的第一条消息的偏移量commitlog offset 为 0 
+>
+> 当第一个文件放满时，则会自动生成第二个文件继续存放消息。假设第一个文件大小是 1073741820字节（1G = 1073741824字节），则第二个文件名就是00000000001073741824。
+>
+> 以此类推，第n个文件名应该是前n-1个文件大小之和。
+>
+> 一个Broker中所有mappedFile文件的commitlog offset是连续的
+
+需要注意的是，一个Broker中仅包含一个commitlog目录，**所有的mappedFile文件都是存放在该目录中的**，即无论当前Broker中存放着多少Topic的消息，这些消息都是被顺序写入到了mappedFile文件中的，也就是说，**这些消息在Broker中存放时并没有被按照Topic进行分类存放。**
+
+> mappedFile文件时顺序读写的文件，所有其访问效率很高
+>
+> 无论时SSD磁盘还是SATA磁盘，通常情况下，顺序存取效率都会高于随机存取
+
+**消息单元**
+
+![image-20211208220330020](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208220330020.png)
+
+mappedFile文件内容由一个个的`消息单元`构成，每个消息单元中包含消息总长度MsgLen、消息的物理位置physicalOffset、消息内容Body、消息体查长度BodyLenth、消息主题Topic、Topic长度TopicLenth、消息生产者BornHost、消息发送时间戳BornTimestamp、消息所在队列QueueId、消息在Queue中存储的偏移量QueueOffset等近20余项相关属性
+
+> 需要注意到，消息单元中是包含Queue相关属性的。所以，我们在后续的学习中，就需要十分留意commitlog与queue间的关系是什么？
+>
+> 一个mappedFile文件中第m+1个消息单元的commitlog offset偏移量
+>
+> L(m+1) = L(m) + MsgLen(m) (m >= 0)
+
+
+
+#### 2、consumequeue
+
+![image-20211208220941089](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208220941089.png)
+
+**目录与文件**
+
+![image-20211208221025397](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208221025397.png)
+
+为了提高效率，会为每个Topic在~/store/consumequeue中创建一个目录，目录名为Topic名称。在该Topic目录下，会再为每个该Topic的Queue建立一个目录，目录名为queueId。每个目录中存放着若干consumequeue文件，consumequeue文件是commitlog的索引文件，可以根据consumequeue定位到具
+体的消息。
+
+consumequeue文件名也由20位数字构成，表示当前文件的第一个索引条目的起始位移偏移量。与mappedFile文件名不同的是，其后续文件名是固定的。因为consumequeue文件大小是固定不变的。
+
+**索引条目**
+
+![image-20211208221243607](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208221243607.png)
+
+每个consumequeue文件可以包含30w个索引条目，每个索引条目包含了三个消息重要属性：消息在mappedFile文件中的偏移量CommitLog Offset、消息长度、消息Tag的hashcode值。这三个属性占20个字节，所以每个文件的大小是固定的30w * 20字节
+
+> 一个consumequeue文件中所有消息的Topic一定是相同的。但每条消息的Tag可能是不同
+
+#### 3、对文件的读写
+
+![image-20211208221338145](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208221338145.png)
+
+**消息写入**
+
+一条消息进入到Broker后经历了一下几个过程才最终被持久化
+
+- Broker根据queueId，获取到该消息对应索引条目要在consumequeue目录中写入偏移量，即QueueOffset
+- 将ququeId、queueOffset等数据，与消息一起封装为消息单元
+- 将消息单元写入到commitlog
+- 同时，形成消息索引条目
+- 将消息索引条目分发到相应的consumequeue
+
+
+
+**消息拉取**
+
+- 当Consumer来拉取消息时会经历以下几个步骤：
+
+  1、Consumer获取到其要消费消息所在的Queue的`消费偏移量offset`，计算出其要消费消息的`消息offset`
+
+  > 消费offset即消费进度，consumer对某个Queue的消费offset，即消费到了该Queue的第几条消息
+  >
+  > 消息offset = 消费offset + 1
+
+  2、Consumer向Broker发送拉取请求，其中会包含其要拉取消息的Queue、消息offset及消息Tag
+
+  3、Broker计算在该consumequeue中的queueOffset
+
+  > queueOffset = 消息offset * 20字节
+
+  4、从该queueOffset处开始向后查找第一个指定Tag的索引条目
+
+  5、解析该索引条目的前8个字节，即可定位到该消息在commitlog中的commitlog offset
+
+  6、对应commitlog offset中读取消息单元，并发送给consumer
+
+**性能提升**
+
+RocketMQ中，无论是消息本身还是消息索引，都是存储在磁盘上的。其不会影响消息的消费吗？当然不会。其实RocketMQ的性能在目前的MQ产品中性能是非常高的。因为系统通过一系列相关机制大大提升了性能
+
+首先，RocketMQ对文件的读写操作是通过`mmap零拷贝`进行的，**将对文件的操作转化为直接对内存地址进行操作**，从而极大地提高了文件的读写效率
+
+其次，**consumequeue中的数据是顺序存放的**，还引入了`PageCache的预读取机制`，**使得对consumequeue文件的读取几乎接近于内存读取，即使在有消息堆积情况下也不会影响性能**。
+
+> PageCache机制，页缓存机制，是OS对文件的缓存机制，用于加速对文件的读写操作。
+>
+> 一般来说，程序对文件进行顺序读写的速度几乎接近于内存读写速度，主要原因是由于OS使用PageCache机制对读写访问操作进行性能优化，将一部分的内存用作PageCache。
+>
+> - 写操作：OS会先将数据写入到PageCache中，随后会以异步方式由pdflush（page dirty flush)内核线程Cache中的数据刷盘到物理磁盘
+> - 读操作：若用户要读取数据，其首先会从PageCache中读取，若没有命中，则OS在从物理磁盘上加载该数据到PageCache的同时，也会顺序对其相邻数据块中的数据进行**预读取**
+
+**RocketMQ中可能会影响性能的是对commitlog文件的读取**。因为对commitlog文件来说，**读取消息时会产生大量的随机访问，而随机访问会严重影响性能**。不过，如果选择合适的系统IO调度算法，
+
+比如设置调度算法为Deadline（采用SSD固态硬盘的话），随机读的性能也会有所提升。
+
+#### 4、与Kafka的对比
+
+RocketMQ的很多思想来源于Kafka，其中commitlog与consumequeue
+
+RocketMQ中commitlog目录与consumequeue的结合就类似于kafka中partition分区目录，mappedFile文件就类似于Kafka中的segment段。
+
+> Kafka中的Topic的消息被分割为一个或多个partition。partition是一个物理概念，对应到系统上就是topic目录下的一个或多个目录。每个partition中包含的文件称segment，是具体存放消息的文件
+>
+> Kafka中消息存放的目录结构是：topic目录下有partition目录，partition目录下有segment
+>
+> Kafka中没有二级分类标签Tag这个
+>
+> Kafka中无需索引文件。因为生产者是将消息直接写在了partition中的，消费者也是直接从partition中读取数据的
+
+
+
+## 三、indexFile
+
+除了通过通常的指定Topic进行消息消费外，RocketMQ还提供了根据key进行消息查询的功能。该查询是通过store目录中的index子目录中的indexFile进行索引实现的快速查询。当然，这个indexFile中的索引数据是在`包含了key的消息`被发送到Broker时写入的。如果消息中没有包含key，则不会写入。
+
+#### 1、索引条目结构
+
+每个Broker中会包含一组indexFile，每个indexFile都是以一个`时间戳`命名的（这个indexFile被创建时的时间戳）。每个indexFile文件由三部分构成：indexHeader，slots槽位，indexes索引数据。每个indexFile文件中包含500w个slot槽。而每个slot槽又可能会挂载很多的index索引单元。
+
+![image-20211208224544956](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208224544956.png)
+
+indexHeader固定40个字节，其中存放着如下数据：
+
+![image-20211208224558557](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208224558557.png)
+
+- beginTimestamp：该indexFile中第一条消息的存储时间
+- endTimestamp：该indexFile中最后一条消息存储时间
+- beginPhyoffset：该indexFile中第一条消息在commitlog中的偏移量commitlog offset
+- endPhyoffset：该indexFile中最后一条消息在commitlog中的偏移量commitlog offset
+- hashSlotCount：已经填充有index的slot数量（并不是每个slot槽下都挂载有index索引单元，这里统计的是所有挂载了index索引单元的slot槽的数量）
+- indexCount：该indexFile中包含的索引单元个数（统计出当前indexFile中所有slot槽下挂载的所有index索引单元的数量之和）
+
+indexFile中最复杂的是Slots与Indexes间的关系。在实际存储时，Indexes是在Slots后面的，但为了便于理解，将它们的关系展示为如下形式：
+
+![image-20211208224809208](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208224809208.png)
+
+**key的hash值 % 500w的结果即为slot槽位**，然后将该slot值修改为该index索引单元的indexNo，根据这个indexNo可以计算出该index单元在indexFile中的位置。
+
+不过，该取模结果的重复率是很高的，为了解决该问题，在每个index索引单元中增加了preIndexNo，用于指定该slot中当前index索引单元的前一个index索引单元。
+
+而slot中始终存放的是其下最新的index索引单元的indexNo，这样的话，只要找到了slot就可以找到其最新的index索引单元，而通过这个index索引单元就可以找到其之前的所有index索引单元
+
+> indexNo是一个在indexFile中的流水号，从0开始依次递增。即在一个indexFile中所有indexNo是以此递增的。indexNo在index索引单元中是没有体现的，其是通过indexes中依次数出来的。
+
+index索引单元默写20个字节，其中存放着以下四个属性：
+
+![image-20211208225018596](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208225018596.png)
+
+- keyHash：消息中指定的业务key的hash值
+- phyOffset：当前key对应的消息在commitlog中的偏移量commitlog offset
+- timeDiff：当前key对应消息的存储时间与当前indexFile创建时间的时间差
+- preIndexNo：当前slot下当前index索引单元的前一个index索引单元的indexNo
+
+
+
+#### 2、indexFile的创建
+
+indexFile的文件名为当前文件被创建时的时间戳。这个时间戳有什么用处
+
+根据业务key进行查询时，查询条件除了key之外，还需要指定一个要查询的时间戳，表示要查询不大于该时间戳的最新的消息，
+
+即查询指定时间戳之前存储的最新消息。这个时间戳文件名可以简化查询，提高查询效率。具体后面会详细讲解。
+
+indexFile文件是何时创建的？其创建的条件（时机）有两个：
+
+- 当第一条带key的消息发送来后，系统发现没有indexFile，此时创建第一个indexFile文件
+- 当一个indexFile中挂载的index索引单元数量超过2000w个时，会创建新的indexFile。当带key的消息发送到来后，系统会找到最新的indexFile，并从其indexHeader中的最后4字节中读取到indexCount。若indexCount >= 2000w时，会创建新的indexFile
+
+> 由于可以推算出，一个indexFile的最大大小是：(40 + 500w * 4 + 2000w * 20)字节
+
+
+
+#### 3、查询流程
+
+当消费者通过业务key来查询相应的消息时，其需要经过一个相对较复杂的查询流程。不过，在分析查询流程之前，首先要清楚几个定位计算式子
+
+> 计算指定消息key的slot槽位序号：
+> slot槽位序号 = key的hash % 500w
+
+> 计算槽位序号为n的slot在indexFile中的起始位置：
+> slot(n)位置 = 40 + (n - 1) * 4
+
+> 计算indexNo为m的index在indexFile中的位置：index(m)位置 = 40 + 500w * 4 + (m - 1) * 2
+
+40为indexFile中indexHeader的字
+
+500w * 4 是所有slots所占的字
+
+具体查询流程如下
+
+![image-20211208230210017](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208230210017.png)
+
+## 四、消息的消费
+
+消费者从Broker中获取消息的方式有2种
+
+- pull拉取方式
+- push推送方式
+
+消费者组对于消息消费的模式又分为2种：
+
+- 集群消费Clustering
+- 广播消费Broadcasting
+
+#### 1、获取消费类型
+
+**拉取式消费**
+
+Consumer主动从Broker中拉取消息，主动权由Consumer控制，一旦获取了批量消息，就会启动消费过程。
+
+不过，该方式的实时性比较弱，即Broker中有了新的消息时消费者并不能及时发现并消费。
+
+> 由于拉取时间间隔是由用户指定的，所以在设置该间隔时需要注意平稳；
+>
+> 间隔太短，空请求比例会增加；间隔太长，消息的实时性太差
+
+**推送式消费**
+
+该模式下Broker收到数据后会主动推送给Consumer，该获取方式一般实时性比较高。
+
+该获取方式是典型的`发布-订阅`模式，即Consumer向其关联的Queue注册了监听器，一旦发现有新的消息来到就会触发回调的执行，回调方法是Consumer去Queue中拉取消息，**而这些都是基于Consumer与Broker间的长连接。长连接得到维护时需要消耗系统资源的。**
+
+对比：
+
+- pull : 需要应用去实现对关联Queue的遍历，实时性差，但便于应用控制消息的拉取
+- push：封装了对关联Queue的遍历，实时性强，但会占用较多的系统资源
+
+#### 2、消费模式
+
+**广播消费**
+
+![image-20211208232009183](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208232009183.png)
+
+广播消费模式下，相同Consumer Group组每个Consumer实例都接收同一个Topic的全量消息，即每条消息都会被发送到Consumer Group中的`每个`Consumer
+
+**集群消费**
+
+![image-20211208232632798](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208232632798.png)
+
+集群消费模式下，相同Consumer Group的每个Consumer实例`平均分摊`同一个Topic下的消息，即每条消息只会被发送到Consumer Group中的`某个`Consumer
+
+**消息保存进度**
+
+- 广播模式：消费进度保存在Consumer端，因为广播模式下consumer group中每个consumer都会消费所有消息，但他们的消费进度是不同的。所以consumer各自保存各自的消费进度。
+- 集群模式：消费进度保存在broker中，consumer group中的所有consumer共同消费一个Topic中的消息，**同一条消息只会被消费一次，消费进度会参与到了消费的负载均衡中，故消费进度是需要共享的**，下图是broker中存放的各个Topic的各个Queue的消费进度。
+
+![image-20211208233350020](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208233350020.png)
+
+#### 3、Rebalance机制
+
+Rebalance机制讨论的前提是：集群消费
+
+**什么是Rebalance**
+
+Rebalance再均衡，指的是，**将一个Topic下的多个Queue在同一个Consumer Group中的多个Consumer间进行重新分配的过程。**
+
+![image-20211208233710437](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208233710437.png)
+
+**Rebalance机制的本意是为了提升消息的`并行消费能力`。**
+
+例如：一个Topic下5个队列，在只有1个消费者的情况下，这个消费者将负责消费这5个队列的消息。如果此时我们增加一个消费者，那么就可以给其中一个消费者分配2个队列，给另外一个消费者分配3个队列，从而提升消息的并行消费的能力。
+
+**Rebalance限制**
+
+**由于一个队列最多分配给一个消费者，因此当某个消费者下的消费实例数量 > 队列的数量是，多余的消费者实例将分配不到任何队列。**
+
+**Rebalance危害**
+
+Rebalance在提升消息消费能力的同时，也带来一些问题：
+
+**消费暂停**：只有一个Consumer时，其负责消费所有队列；在新增了一个Consumer后回触发Rebalance的发生。此时原Consumer就需要暂停部分队列的消费，等到这些队列分配给新的Consumer后，这些暂停消费的队列才能继续被消费
+
+**消费重复**：Consumer在消费新分配给自己的队列的时候，必须接着之前Consumer提交的消费进度的offset继续消费。然而默认情况下，offset是异步提交的，这个**异步性导致提交**到Broker的offset与Consumer实际消费的消息并不一致
+
+（可能Broker消费了0-100，在100段提交了，后又继续消费，而消费进度还只是在100段），这个不一致的差值就是可能会重复消费的消息。
+
+> 同步提交：consumer提交了其消费完毕的一批消息的offset给broker后，**需要等待broker的成功ACK**。当收到ACK后，consumer才会继续获取并消费下一批消息。在等待ACK期间，consumer是阻塞的
+>
+> 异步提交：consumer提交了其消费完毕的一批消息的offset给broker后，**不需要等待broker的成功ACK**。consumer可以直接获取并消费下一批消息。
+>
+> 对于一次性读取消息的数量，需要根据具体业务场景选择一个相对均衡的是很有必要的。
+>
+> 因为数量过大，系统性能提升了，但产生重复消费的消息数量可能会增加；数量过小，系统性能会下降，但被重复消费的消息数量可能会减少
+
+**消息突刺**：由于Rebalance可能导致重复消费，如果需要重复消费的消息过多，或者因为Rebalance暂停时间过长从而导致积压了部分消息。那么有可能会导致在Rebalance结束之后瞬间需要消费很多消息。
+
+**Rebalance产生的原因**
+
