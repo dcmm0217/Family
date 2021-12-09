@@ -1092,3 +1092,79 @@ Rebalance在提升消息消费能力的同时，也带来一些问题：
 
 **Rebalance产生的原因**
 
+导致Rebalance产生的原因，无非就是两个：
+
+1、消费者所订阅Topic的Queue数量发生变化
+
+2、消费者组中消费者数量发生变化
+
+> 1、Queue数量发生变化的场景
+>
+> - Broker扩容或缩容
+> - Broker升级运维
+> - Broker与NameServer间的网络异常
+> - Queue扩容或者缩容
+>
+> 2、消费者数量发生变化的场景
+>
+> - consumer group扩容或缩容
+> - consumer 升级运维
+> - consumer 与 NameServer 间网络异常
+
+**Rebalance过程**
+
+在Broker中维护着多个Map集合，这些集合中动态存放着当前Topic中Queue的信息，**Consumer Group中Consumer实例的消息。一旦发现消费者所订阅的Queue数量发生变化，或消费者组中消费者的数量发生变化，立即向Consumer Group中的每个实例发出Rebalance通知**
+
+> TopicConfigManager：key是topic名称，value是TopicConfig。TopicConfig中维护着该Topic中所有的Queue数据
+>
+> ConsumerManager : key是Consumer Group Id，value是ConsumerGroupInfo。
+>
+> ConsumerGroupInfo中维护着该Group中所有Consumer实例数据
+>
+> ConsumerOffsetManager：key为`Topic与 订阅该Topic的Group组合，即topic@group`，value是一个内层Map，内层Map的key为QueueId，内层Map的Value为该Queue的消费进度offset。
+
+Consumer实例在接收到通知后会采用`Queue分配算法`自己获取到相应的Queue，即由Consumer实例自主进行Rebalance
+
+**与Kafka对比**
+
+在Kafka中，一旦发现出现了Rebalance条件，Broker会调用Group Coordinator来完成Rebalance。Coordinator是Broker中的一个进程**，Coordinator会在Consumer Group中选出一个Group Leader**。由这个Leader根据自己本身组情况完成Partition分区的再分配，这个再分配结果会上报给Coordinator，并由Coordinator同步给Group中的所有Consumer实例。
+
+**Kafka中的Rebalance是由Consumer Leader完成的，而RocketMQ中的Rebalance是由每个Consumer自己完成的，Group中不存在Leader**
+
+#### 4、Queue分配算法
+
+一个Topic中的Queue只能由Consumer Group中的一Consumer进行消费，而一个Consumer可以同时消费多个Queue中的消息。那么Queue与Consumer间的配对关系是如何确定的，
+
+即Queue要分配给哪个Consumer进行消费，也是有算法策略的。常见的有四种策略。这些策略是通过在创建Consumer时的
+构造器传进去的。
+
+**平均分配策略**
+
+![image-20211209233253356](https://gitee.com/huangwei0123/image/raw/master/img/image-20211209233253356.png)
+
+该算法是要根据 `avg = QueueCout / ConsumerCount`的鸡算结果进行分配的。如果能够整除，则按顺序将avg个Queue逐个分配Consumer；如果不能整除，则将多余的Queue按照Consumer顺序逐个分配。
+
+> 该算法即，先计算号每个Consumer应该分得几个Queue，然后再依次将这些数量的Queue逐个分配给Consumer
+
+**环形平均策略**
+
+![image-20211209233519319](https://gitee.com/huangwei0123/image/raw/master/img/image-20211209233519319.png)
+
+环形平均算法是指，根据消费者的顺序，依次在由queue队列组成的环形图中逐个分配。
+
+> 该算法不用事先计算每个Consumer需要分配几个Queue，直接一个一个分配即可。
+
+**一致性hash策略**
+
+![image-20211209233639096](https://gitee.com/huangwei0123/image/raw/master/img/image-20211209233639096.png)
+
+该算法会将Consumer的hash值作为Node节点存放到hash环上，然后将queue的hash值也放到hash环上，通过`顺时针`方向，距离queue最近的那个consumer就是该queue要分配的consumer。
+
+> 该算法存在的问题：分配不均
+
+**同机房策略**
+
+![image-20211209233846198](https://gitee.com/huangwei0123/image/raw/master/img/image-20211209233846198.png)
+
+该算法会**根据queue的部署机房位置和consumer的位置**，过滤出**当前consumer相同机房的queue**。然后按照平均分配策略或环形平均策略对同机房queue进行分配。如果没有同机房的queue，则按照平均分配策略或环形平均策略对所有queue进行分配。
+
