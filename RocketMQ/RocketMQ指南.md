@@ -915,7 +915,7 @@ RocketMQ中commitlog目录与consumequeue的结合就类似于kafka中partition�
 
 
 
-## 三、indexFile
+### 三、indexFile
 
 除了通过通常的指定Topic进行消息消费外，RocketMQ还提供了根据key进行消息查询的功能。该查询是通过store目录中的index子目录中的indexFile进行索引实现的快速查询。当然，这个indexFile中的索引数据是在`包含了key的消息`被发送到Broker时写入的。如果消息中没有包含key，则不会写入。
 
@@ -996,7 +996,7 @@ indexFile文件是何时创建的？其创建的条件（时机）有两个：
 
 ![image-20211208230210017](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208230210017.png)
 
-## 四、消息的消费
+### 四、消息的消费
 
 消费者从Broker中获取消息的方式有2种
 
@@ -1168,3 +1168,244 @@ Consumer实例在接收到通知后会采用`Queue分配算法`自己获取到�
 
 该算法会**根据queue的部署机房位置和consumer的位置**，过滤出**当前consumer相同机房的queue**。然后按照平均分配策略或环形平均策略对同机房queue进行分配。如果没有同机房的queue，则按照平均分配策略或环形平均策略对所有queue进行分配。
 
+**对比**
+
+一致性hash算法存在的问题：
+
+两种平均分配策略的分配效率较高，一致性hash策略的较低。
+
+因为一致性hash算法比较复杂，另外，一致性hash策略分配的结果也很大可能存在不平均的情况
+
+一致性hash算法存在的意义：
+
+**其可以有效减少由于消费者组扩容或缩容所带来的大量的Rebalance**
+
+![image-20211210222644161](https://gitee.com/huangwei0123/image/raw/master/img/image-20211210222644161.png)
+
+![image-20211210222720021](https://gitee.com/huangwei0123/image/raw/master/img/image-20211210222720021.png)
+
+**一致性hash算法应用场景：**
+
+**Consumer数量变化比较频繁的场景。**
+
+**5、至少一次原则**
+
+RocketMQ有一个原则：每条消息必须要被`成果消费`一次
+
+那 什么是成功消费呢？
+
+Consumer在消费完消息后会向其`消费进度记录器`提交其消费信息的offset，offset被成功记录到记录器中，那么这条消息就表示被成功消费了。
+
+> 什么是消费进度记录器？
+>
+> 对于广播消费模式来说，Consumer本身就是消息进度记录器
+>
+> 对于集群消费来说，Broker就是消息进度记录器
+
+
+
+### 五、订阅关系的一致性
+
+订阅关系的一致性指的是，**同一个消费者组（Group ID相同）下所有Consumer实例所订阅的Topic与Tag及对消息的处理逻辑必须完全一致**。否则，消息消费得到逻辑就会混乱，甚至导致消息丢失。
+
+#### 1、正确订阅关系
+
+多个消费者组订阅了多个Topic，并且对每个消费者组里的多个消费者实例的订阅关系保持了一致。
+
+![image-20211210223403031](https://gitee.com/huangwei0123/image/raw/master/img/image-20211210223403031.png)
+
+#### 2、错误订阅关系
+
+一个消费者组订阅了多个Topic，但是该消费者组里的多个Consumer实例订阅关系并没有保持一致。
+
+![image-20211210223548119](https://gitee.com/huangwei0123/image/raw/master/img/image-20211210223548119.png)
+
+**订阅了不同Topic**
+
+该例中的错误在于，同一个消费者组里面的两个Consumer实例订阅了不同的Topic
+
+Consumer实例1-1 （订阅了topic为jodie_test_A，tag为所有的消息）
+
+```java
+Properties properties = new Properties();
+
+properties.put(PropertyKeyConst.GROUP_ID, "GID_jodie_test_1");
+
+Consumer consumer = ONSFactory.createConsumer(properties);
+
+consumer.subscribe("jodie_test_A", "*", new MessageListener() {
+    public Action consume(Message message, ConsumeContext context) {
+        System.out.println(message.getMsgID());
+        return Action.CommitMessage;
+    }
+});
+```
+
+Consumer实例1-2：（订阅了topic为jodie_test_B，tag为所有消息）
+
+```java
+Properties properties = new Properties();
+
+properties.put(PropertyKeyConst.GROUP_ID, "GID_jodie_test_1");
+
+Consumer consumer = ONSFactory.createConsumer(properties);
+
+consumer.subscribe("jodie_test_B", "*", new MessageListener() {
+    public Action consume(Message message, ConsumeContext context) {
+        System.out.println(message.getMsgID());
+        return Action.CommitMessage;
+    }
+});
+```
+
+
+
+**订阅了不同的Tag**
+
+该实例中的错误在于，同一个消费者组中的两个Consumer订阅了相同Topic的不同Tag
+
+Consumer实例2-1：（订阅了topic为jodie_test_A，tag为TagA的消息）
+
+```java
+Properties properties = new Properties();
+
+properties.put(PropertyKeyConst.GROUP_ID, "GID_jodie_test_2");
+
+Consumer consumer = ONSFactory.createConsumer(properties);
+
+consumer.subscribe("jodie_test_A", "TagA", new MessageListener() {
+    public Action consume(Message message, ConsumeContext context) {
+        System.out.println(message.getMsgID());
+        return Action.CommitMessage;
+    }
+});
+```
+
+Consumer实例2-2：（订阅了topic为jodie_test_A，tag为所有的消息）
+
+```java
+Properties properties = new Properties();
+
+properties.put(PropertyKeyConst.GROUP_ID, "GID_jodie_test_2");
+
+Consumer consumer = ONSFactory.createConsumer(properties);
+
+consumer.subscribe("jodie_test_A", "*", new MessageListener() {
+    public Action consume(Message message, ConsumeContext context) {
+        System.out.println(message.getMsgID());
+        return Action.CommitMessage;
+    }
+});
+```
+
+
+
+**订阅了不同数量的Topic**
+
+该实例中的错误在于，同一个消费者组的两个Consumer订阅了不同数量的Topic
+
+Consumer实例3-1：（该Consumer订阅了两个Topic）
+
+```java
+Properties properties = new Properties();
+
+properties.put(PropertyKeyConst.GROUP_ID, "GID_jodie_test_3");
+
+Consumer consumer = ONSFactory.createConsumer(properties);
+
+consumer.subscribe("jodie_test_A", "TagA", new MessageListener() {
+    public Action consume(Message message, ConsumeContext context) {
+        System.out.println(message.getMsgID());
+        return Action.CommitMessage;
+    }
+});
+
+consumer.subscribe("jodie_test_B", "TagB", new MessageListener() {
+    public Action consume(Message message, ConsumeContext context) {
+        System.out.println(message.getMsgID());
+        return Action.CommitMessage;
+    }
+});
+```
+
+Consumer实例3-2：（该Consumer订阅了一个Topic）
+
+```java
+Properties properties = new Properties();
+
+properties.put(PropertyKeyConst.GROUP_ID, "GID_jodie_test_3");
+
+Consumer consumer = ONSFactory.createConsumer(properties);
+
+consumer.subscribe("jodie_test_A", "TagB", new MessageListener() {
+    public Action consume(Message message, ConsumeContext context) {
+        System.out.println(message.getMsgID());
+        return Action.CommitMessage;
+    }
+});
+```
+
+
+
+### 六、Offset管理
+
+> 这里的offset指的是Consumer的消费进度offset
+
+消费进度offset是用来记录每个Queue的不同消费组的消费进度的。根据消费进度记录器的不同，可以分为两种模式：本地模式和远程模式
+
+#### 1、offset本地管理模式
+
+当消费模式为`广播消费`时，offset使用本地模式存储。因为每条消息会被所有的消费者消费，每个消费者管理自己的消费进度，各个消费者之间不存在消费进度的交集。
+
+Consumer在广播消费模式下offset相关数据以json的形式持久化到Consumer本地磁盘文件中，默认文件路径为当前用户主目录下的 `.rocketmq_offsets/${clientId}/${group}/Offsets.json `
+
+其中 `${clientId}`为当前消费者id，默认为 ip@DEFAULT;  `${group}`消费者组名称
+
+#### 2、offset远程管理模式
+
+当消费模式为`集群消费`时，offset使用远程管理模式。因为所有的Consumer实例对消息采用是负载均衡消费，所有Consumer共享Queue的消费进度。
+
+Consumer在集群消费模式下offset相关数据以json的形式持久化到Broker磁盘中，文件路径为当前用户主目录下的`store/config/consumerOffset.json`
+
+Broker启动时会加载这个文件，并写入到一个双层Map（ConsumerOffsetManager中）。外层Map的key为`topic@group`，value为内层map。内层map的key为queueId，value为offset。当发生Rebalance时，新的Consumer会从该Map中获取到对应数据来继续消费。
+
+**集群模式下采用offset远程管理模式，主要是为了保证Rebalance机制**
+
+#### 3、offset用途
+
+消费者时如何从最开始持续消费消息的？消费者要消费的第一条消息的起始位置时用户自己通过
+
+`consumer.setConsumerFromWhere()`方法指定的。
+
+在Consumer启动后，其要消费的第一条消息的起始位置常有三种，这三种位置可以通过枚举类型常量设置。
+
+这个枚举类型为ConsumerFromWhere
+
+![image-20211210230333239](https://gitee.com/huangwei0123/image/raw/master/img/image-20211210230333239.png)
+
+```
+CONSUME_FROM_LAST_OFFSET：从queue的当前最后一条消息开始消费
+CONSUME_FROM_FIRST_OFFSET：从queue的第一条消息开始消费
+CONSUME_FROM_TIMESTAMP：从指定的具体时间戳位置的消息开始消费。这个具体时间戳是通过另外一个语句指定的 。
+consumer.setConsumeTimestamp(“20210701080000”) yyyyMMddHHmmss
+```
+
+当消费完一批消息后，Consumer会提交其消费进度offset给Broker，**Broker在收到消费进度后会将其更新到那个双层Map（ConsumerOffsetManager）及consumerOffset.json文件中，**
+
+然后向该**Consumer进行ACK**，而ACK内容包含三项数据：当前消费队列的最小offset(minOffset)、最大offset（maxOffset）、及下次消费的起始offset（nextBeginOffset）。
+
+#### 4、重试队列
+
+![image-20211210230728497](https://gitee.com/huangwei0123/image/raw/master/img/image-20211210230728497.png)
+
+当rocketMQ对消息的消费出现异常时，**会将发生异常的消息的offset提交到Broker中的重试队列**。系统发生消息消费异常时会为当前的`topic@group`创建一个**重试队列**，该队列以`%retry%开透`，到达重试时间后开始进行消费重试。
+
+#### 5、offset的同步提交与异步提交
+
+集群消费模式下，Consumer消费完消息后，会向Broker提交消费进度offset，其提交方式分为两种：
+
+`同步提交` ：消费者在消费完一批消息后会向broker提交这些消息的offset，然后等待broker的成功响应。若在等待超时之前收到了**成功响应**，则继续读取下一批消息进行消费（**从ACK中获取nextBeginOffset**）。如果**没有收到响应**，则会**重新提交**，直到获取到响应。**而在这个等待过程中，消费者时阻塞的。其严重影响了消费者的吞吐量。**
+
+`异步提交` ： 消费者在消费完一批消息后向broker提交offset，但**无需等待**Broker的成功响应，可以继续读取并消费下一批消息。这种方式**增加了消费者的吞吐量**。但需要注意，broker在收到提交的offset后，还是会向消费者进行响应的。**可能还没有收到ACK，此时Consumer会从Broker中直接获取nextBeginOffset**
+
+### 七、消费幂等
