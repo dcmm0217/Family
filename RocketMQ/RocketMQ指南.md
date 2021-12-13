@@ -1570,3 +1570,388 @@ Consumer将本地缓存的消息提交到消费线程中，使用业务消费逻
 >
 > 分区顺序消息：该类型消息的Topic有多个Queue分区。其仅可以保证该Topic的每个Queue分区中的消息被顺序消费，不能保证整个Topic中消息的顺序消费，为了保证这个分区顺序性，每个Queue分区中的消息在Consumer Group中的同一时刻只能由一个Consumer的一个线程进行消费。即在同一时刻最多会出现多个Queue分区中的多个Consumer的多个线程发生并行消费，所以其并发度为Topic的分区数量。
 
+#### 5、单机线程数计算
+
+对于一台主机中线程池中线程数的设置需要谨慎，不能盲目直接调大线程数，设置过大的线程数反而会带来大量的线程切换的开销。理想环境下单节点的最优线程数计算模型为： `C * (T1 + T2) / T1 `
+
+- C ：CPU内核数
+- T1：CPU内部逻辑计算耗时
+- T2：外部IO操作耗时
+
+> 最优线程数 = C + C * T2/T1
+
+> 注意：该计算出的数值是理想状态下的理论数据，在生产环境中，不建议直接使用。而是根据当前环境，先设置一个比该值小的数值然后观察其压测效果，然后再根据效果逐步调大线程数，直至找到在该环境中性能最佳时的值。
+
+#### 6、如何避免
+
+为了避免在业务使用中出现非预期的消息堆积和消费延迟问题，需要在前期设计阶段对整个业务逻辑进行完善的排查和梳理。其中最重要的就是`梳理消息的消费耗时`和`设置消息消费的并发度`。
+
+**梳理消息的消费耗时**
+
+通过压测获取消息的消费耗时，并对耗时较高的操作的代码逻辑进行分析。梳理消息的消费耗时需要关注一下信息：
+
+- 消息消费逻辑的计算复杂度是否过高，代码是否存在**无限循环和递归**等缺陷。
+- 消息消费逻辑中的IO操作是否是必须的，能否用本地缓存等方案规避。
+- 消费逻辑中的复杂耗时的操作是否可以做异步化处理。如果可以，是否会造成逻辑错乱。
+
+**设置消费并发度**
+
+对于消息消费并发度的计算，可以通过一下两步实施：
+
+- 逐步调大单个Consumer节点的线程数，并观测节点的系统指标，得到单个节点最优的消费线程数和消息吞吐量。
+- 根据上下游链路的`流量峰值`计算出需要设置的节点数
+
+> 节点数 = 流量峰值 / 单个节点消息吞吐量
+
+### 九、消息的清理
+
+消息被消费过后会被清理掉吗? 不会的。
+
+消息是被顺序存储在commitlog文件的，且消息大小不定长，所以消息的清理是不可能以消息为单位进行清理的，而是以commitlog文件为单位进行清理的。否则会急剧下降清理效率，并且实现逻辑复杂。
+
+commitlog文件存在一个`过期时间`，默认为72小时，即三天。除了用户手动清理外，在以下情况下也会被自动清理，无论文件中的消息是否被消费过：
+
+- 文件过期，且到达`清理时间点`（默认为凌晨4点）后，自动清理过期文件
+- 文件过期，且磁盘空间占用率已达`过期清理警戒线`（默认75%）后，无论是否到达清理时间点，都会自动清理过期文件。
+- 磁盘占用率达到`清理警戒线`（默认85%）后，开始按照设定好的规则清理文件，无论是否过期。默认会从最老的文件开始清理
+- 磁盘占用率达到`系统危险警戒线`（默认90%）后，Broker将拒绝消息写入
+
+> 需要注意以下几点：
+>
+> 1、对于RocketMQ系统来说，删除一个1G大小的文件，是一个压力巨大的IO操作。在删除过程中，系统性能会骤然下降。所以，其默认清理时间点为凌晨4点，访问量最小的时间。也正因如此，我们要保障磁盘空间的空闲率，不要使系统出现在其它时间节点删除commitlog文件的情况。
+>
+> 2、官方建议RocketMQ服务的Linux文件系统采用ext4，因为对于文件删除操作，ext4要比ext3性能更好。
+
+
+
+## 第4章 RocketMQ应用
+
+### 一、普通消息
+
+#### 1、消息发送分类
+
+Producer对于消息的发送方式也有多种选择，不同的方式会产生不同的系统效果。
+
+**同步发送消息**
+
+同步发送消息是指，Producer发出一条消息后，会在收到MQ返回的ACK之后才发下一条消息。该方式的消息可靠性最高，但是消息发送效率太低。
+
+![image-20211213090805111](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213090805111.png)
+
+**异步发送消息**
+
+异步发送消息是指，Producer发出消息后无需等待MQ返回ACK，直接发送下一条消息。该方式的消息可靠性可以得到保障，消息发送效率也可以。
+
+![image-20211213090953793](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213090953793.png)
+
+**单向发送消息**
+
+单向发送消息是指，Producer仅负责发送消息，不等待、不处理MQ的ACK。该发送方式时MQ也不返回ACK。该方式的消息发送效率最高，但消息可靠性较差。
+
+![image-20211213091121628](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213091121628.png)
+
+#### 2、代码举例
+
+创建一个Maven的Java工程rocketmq-test
+
+导入依赖
+
+```xml
+ <dependencies> 
+     <dependency> <groupId>org.apache.rocketmq</groupId> 		<artifactId>rocketmq-client</artifactId> 				<version>4.8.0</version> 
+     </dependency> 
+</dependencies>
+```
+
+**定义同步消息发送生产者**
+
+```java
+public class SyncProducer {
+    public static void main(String[] args) throws Exception {
+        // 创建一个producer，参数为producer group的名称
+        DefaultMQProducer producer = new DefaultMQProducer("wei-producer");
+        // 指定nameserver的地址
+        producer.setNamesrvAddr("localhost:9876");
+        // 设置失败重发次数为3 ，默认是2次
+        producer.setRetryTimesWhenSendFailed(3);
+        // 设置发送超时时限为5s，默认为3s
+        producer.setSendMsgTimeout(5000);
+
+        // 开启生产者
+        producer.start();
+
+        // 生产并发送100条消息
+        for (int i = 0; i < 100; i++) {
+            byte[] bytes = ("Hi" + i).getBytes();
+            Message message = new Message("topicA", "*", bytes);
+            // 为消息指定key
+            message.setKeys("key-" + i);
+            // 发送消息
+            SendResult sendResult = producer.send(message);
+            System.out.println(sendResult);
+        }
+    }
+}
+```
+
+```java
+// 消息发送的状态
+public enum SendStatus {
+    SEND_OK,           // 发送成功
+    FLUSH_DISK_TIMEOUT,// 刷盘超时，当Broker设置的刷盘策略为同步刷盘时才可能出现这种异常状态。异步刷盘不会出现
+    FLUSH_SLAVE_TIMEOUT,// slave同步超时，当Broker集群设置的Master-Slave的复制方式为同步复制时才可能出现这种异常状态。异步复制不会出现
+    SLAVE_NOT_AVAILABLE;// 没有可用的slave，当Broker集群设置为Master-Slave的复制方式为同步复制时可能会出现这种异常状态。异步复制不会出现。
+
+}
+```
+
+**定义异步消息发送生产者**
+
+```java
+public class AsyncProducer {
+    public static void main(String[] args) throws MQClientException {
+        DefaultMQProducer producer = new DefaultMQProducer("wei-producer");
+        producer.setNamesrvAddr("localhost:9876");
+        // 指定异步发送失败后不进行重试
+        producer.setRetryTimesWhenSendAsyncFailed(0);
+        // 指定新创建的Topic的Queue数量为2，默认为4
+        producer.setDefaultTopicQueueNums(2);
+
+
+        producer.start();
+
+        for (int i = 0; i < 100; i++) {
+            byte[] bytes = ("hi " + i).getBytes();
+            Message message = new Message("topicB","*",bytes);
+            // 异步发送，指定回调函数
+            try {
+                producer.send(message, new SendCallback() {
+                    // 当producer接收到mq返回回来的ACK，就会执行此方法
+                    public void onSuccess(SendResult sendResult) {
+                        System.out.println(sendResult);
+                    }
+
+                    public void onException(Throwable throwable) {
+                        throwable.printStackTrace();
+                    }
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        try {
+            // sleep一会儿，由于采用异步发送，若不sleep，则消息还未发送就将producer给关闭，出现报错
+            TimeUnit.SECONDS.sleep(2);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        producer.shutdown();
+    }
+}
+
+```
+
+**定义单向消息发送生产者**
+
+```java
+public class OneWayProducer {
+    public static void main(String[] args) throws MQClientException {
+        DefaultMQProducer producer = new DefaultMQProducer("wei-producer");
+        producer.setNamesrvAddr("localhost:9876");
+
+        producer.start();
+        for (int i = 0; i < 10; i++) {
+            byte[] bytes = ("hi" + i).getBytes();
+            Message message = new Message("topicC","*",bytes);
+            try {
+                // 单向发送
+                producer.sendOneway(message);
+            } catch (RemotingException e) {
+                e.printStackTrace();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+        producer.shutdown();
+        System.out.println("producer shutdown !");
+    }
+}
+```
+
+**定义消息消费者**
+
+```java
+public class SomeConsumer {
+    public static void main(String[] args) throws MQClientException {
+        DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("wei-consumer");
+        consumer.setNamesrvAddr("localhost:9876");
+        // 设置从第一条消息开始消费
+        consumer.setConsumeFromWhere(ConsumeFromWhere.CONSUME_FROM_FIRST_OFFSET);
+        // 指定消费的topic和tag
+        consumer.subscribe("topicA","*");
+        // 指定采用广播模式进行消费，默认为集群模式
+        consumer.setMessageModel(MessageModel.BROADCASTING);
+
+        //注册消息监听器
+        consumer.registerMessageListener(new MessageListenerConcurrently() {
+            // 一旦broker中有了其订阅的消息就会触发该方法的执行
+            // 返回值为当前consumer的消费状态
+            @Override
+            public ConsumeConcurrentlyStatus consumeMessage(List<MessageExt> list, ConsumeConcurrentlyContext consumeConcurrentlyContext) {
+                // 逐条消费消息
+                for (MessageExt messageExt : list) {
+                    System.out.println(messageExt);
+                }
+                // 返回消费状态为成功
+                return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
+            }
+        });
+        // 开启消费者消费
+        consumer.start();
+        System.out.println("consumer started !");
+    }
+}
+```
+
+### 二、顺序消息
+
+#### 1、什么是顺序消息
+
+顺序消息指的是，严格按照消息的`发送顺序`进行`消费`的消息（FIFO）
+
+默认情况下生产者会把消息以Round Robin 轮询方式发送到不同的Queue分区队列；而消费消息时会从多个Queue上拉取消息，这种情况下的发送和消费是不能保证顺序的。如果将消息仅发送到同一个Queue中，消费时也只从这个Queue上拉取消息，就严格保证了消息的顺序性。
+
+#### 2、为什么需要顺序消息
+
+例如，现在有TOPIC  `ORDER_STATUS`（订单状态），其下有4个Queue队列，该Topic中的不同消息用于描述当前订单的不同状态。假设订单有状态：`未支付`、`已支付`、`发货中`、`发货成功`、`发货失败`。
+
+根据以上订单状态，生产者从`时序`上可以生成如下几个消息：
+
+`订单T0000001:未支付` --->  `订单T0000001：已支付` ---> `订单T0000001:发货中` ---> `订单T0000001:发货失败`
+
+消息发送到MQ中之后，Queue的选择如果采用轮询策略，消息在MQ的存储可能如下：
+
+![image-20211213153652061](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213153652061.png)
+
+![image-20211213153706057](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213153706057.png)
+
+这种情况下，我们希望Consumer消费消息的顺序和我们发送是一致的，然而上述MQ的投递和消费方式，我们无法保证顺序是正确的。对于顺序异常的消息，Consumer即使设置上有一定的状态容错，也不能完全处理好这么多种随机出现的组合情况。
+
+![image-20211213154118686](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213154118686.png)
+
+基于上述的情况，可以设计如下方案：对于相同订单号的消息，通过一定的策略，将其放置在一个Queue中，然后消费者再采用一定的策略（**例如，一个线程独立处理一个queue，保证处理消息的顺序性），能够保证消费的顺序性。**
+
+#### 3、有序性分类
+
+根据有序范围的不同，RocketMQ可以严格地保证两种消息的有序性：`分区有序`与`全局有序`。
+
+**全局有序**
+
+![image-20211213154724285](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213154724285.png)
+
+当**发送和消费参与的Queue只有一个时**所保证的**有序**是整个Topic中消息的顺序，称为`全局有序`
+
+> 在创建Topic时指定Queue的数量。有三种指定方式：
+>
+> 1、在代码中创建Producer时，可以指定其自动创建的Topic的Queue数量
+>
+> 2、在RocketMQ可视化控制台中手动创建Topic时指定Queue数量
+>
+> 3、使用mqadmin命令手动创建Topic时指定Queue数量
+
+**分区有序**
+
+![image-20211213155418958](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213155418958.png)
+
+如果有多个Queue参与，其仅可保证在该Queue分区队列上的消息顺序，则成为`分区有序`
+
+> 如何实现Queue的选择？在定义Producer时我们可以指定消息队列选择器，而这个选择器是我们自己实现了MessageQueueSelector接口定义的。
+>
+> 在定义选择器的选择算法时，一般需要使用选择key。这个选择key可以是消息key也可以是其他数据。但无论谁做选择key，都不能重复，都是唯一的。
+
+> 一般性的选择算法是，让选择key（或其hash值）与该Topic所包含的Queue的数量取模，其结果即为选择出的Queue的QueueId。
+>
+> 取模算法存在一个问题：不同选择key与Queue数量取模结果可能会是相同的，即不同选择key的消息可能会出现在相同的Queue，即同一个Consumer可能会消费到不同选择key的消息。这个问题如何解决？
+>
+> 一般性做法是，从消息中获取到选择key，对其进行判断。若是当前Consumer需要消费的消息，则直接消费，否则，什么也不做。这种做法要求选择key要能够随着消息一起被Consumer获取到。此时使用消息key作为选择key是比较好的做法。
+>
+> 以上做法会不会出现如下新的问题呢？不属于那个Consumer的消息被拉取走了，那么应该消费该消息的Consumer是否还能再消费该消息呢？同一个Queue中的消息不可能被同一个Group中的不同Consumer同时消费。所以，消费现一个Queue的不同选择key的消息的Consumer一定属于不同的Group。而不同的Group中Consumer间的消费是相互隔离的，互不影响的。
+
+#### 4、代码举例
+
+```java
+
+```
+
+### 三、延时消息
+
+#### 1、什么是延时消息
+
+当消息写入到Broker后，在指定的时长后才可被消费处理的消息，称为延时消息。
+
+采用RocketMQ的延时消息可以实现`定时任务`的功能，而无需使用定时器。典型场景是，**电商交易中超时未支付关闭订单的场景。12306平台订票超时未支付取消订单的场景。**
+
+> 在电商平台中，订单创建时会发送一条延时消息。这条消息将会在30min后投递给后台业务系统（Consumer），后台业务系统收到该消息后会判断对应的订单是否已经完成支付。如果未完成，则取消订单，将商品再次放回到库存；如果完成支付，则忽略。
+
+> 在12306平台中，车票预订成功后就会发送一条延迟消息。这条消息将会在45min投递给后台业务系统（Consumer），后台业务系统收到该消息后会判断对应的订单是否已经完成支付。如果未完成，则取消预订，将车票再次放回到票池；如果完成支付，则忽略。
+
+#### 2、延时等级
+
+延时消息的延迟时长`不支持随意时长`的延迟，是通过特定的延迟等级来指定的。延时等级定义在RocketMQ服务端的MessageStoreConfig类中的如下变量中：
+
+![image-20211213162431619](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213162431619.png)
+
+即，若指定的延时等级为3，则表示延迟时长为10s，即延迟等级是从1开始计数的。
+
+当然，如果需要自定义的延时等级，可以通过在broker加载的配置中新增如下配置（例如下面增加了1天这个等级1d），配置文件在RocketMQ安装目录下的conf目录中。
+
+```
+messageDelayLevel = 1s 5s 10s 30s 1m 2m 3m 4m 5m 6m 7m 8m 9m 10m 20m 30m 1h 2h 1d
+```
+
+#### 3、延时消息实现原理
+
+![image-20211213163331594](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213163331594.png)
+
+具体实现方案是：
+
+**修改消息**
+
+![image-20211213163356815](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213163356815.png)
+
+Producer将消息发送到Broker后，Broker会首先将消息写入到commitlog文件，然后需要将其分发到相应的consumerqueue。不过，在分发之前，系统会先判断消息中是否带有延迟等级。若没有，则直接正常分发；若有则需要经历一个复杂的过程：
+
+- 修改消息的Topic为SCHEDULE_TOPIC_XXXX
+- 根据延时等级，在consumequeue目录中SCHEDULE_TOPIC_XXXX主题下创建出相应的queueId，目录与consumequeue文件（如果没有这些目录与文件的话）。
+
+> 延迟等级delayLevel与queueId的对应关系为 queueId = delayLevel - 1
+>
+> 需要注意，在创建queueId目录时，并不是一次性地将所有延迟等级对应地目录全部创建完毕，而是用到哪个延迟等级创建哪个目录
+
+![image-20211213163936118](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213163936118.png)
+
+- 修改消息索引单元内容，索引单元中地Message Tag HashCode部分原本存放的是消息的Tag的Hash值。现修改为消息的`投递时间`。投递时间是指该消息被重新修改为原Topic后再次被写入到commitlog中的时间。`投递时间 = 消息存储时间 + 延时等级时间`。消息存储时间指的是消息被发送到Broker时的时间戳。
+- 将消息索引写入到SCHEDULE_TOPIC_XXXX主题下相应的consumequeue中
+
+> SCHEDULE_TOPIC_XXXX目录中各个延时等级Queue中的消息是如何排序的？
+>
+> 是按照消息投递时间排序的。一个Broker中同一等级的所有延时消息会被写入到consumequeue目录中SCHEDULE_TOPIC_XXXX目录下相同Queue中。即一个Queue中的消息投递时间的延迟等级时间是相同的。那么投递时间就取决于`消息存储时间`了。即按照消息被发送到Broker的时间进行排序的。
+
+**投递延时消息**
+
+Broker内部有一个延迟消息服务类ScheduleMessageService，其会消费SCHEDULE_TOPIC_XXXX中的消息，即按照每条消息的投递时间，将延时消息投递到目标Topic中，不过，在投递之前会从commitlog中将原来写入的消息再次读出，并将其原来的延时等级设置为0，即原消息变为了一条不延迟的普通消息。然后再次将消息投递到目标Topic中。
+
+> ScheuleMessageService在Broker启动时，会创建并启动一个定时器Timer，用于执行相应的定时任务。
+>
+> 系统会根据延时等级的个数，定义相应数量的TimerTask，每个TimerTask负责一个延迟等级消息的消费与投递。每个TimerTask都会检测相应的Queue队列的第一条消息是否到期。
+>
+> 若第一条消息未到期，则后面的所有消息更不会到期（消息是按照投递时间排序的）；若第一条消息到期了，则将该消息投递到目标Topic，即消费该消息。
+
+**将消息重新写入commitlog**
+
+延迟消息服务类ScheuleMessageService将延迟消息再次发送给了commitlog，并再次形成新的消息索引条目，分发到相应Queue。
+
+> 着其实就是一次普通消息的发送。只不过这次的消息Producer是延迟消息服务类ScheuleMessageService
+
+#### 4、代码举例
+
