@@ -2169,8 +2169,109 @@ XA模式是一个典型的2PC，其执行原理如下：
 
 #### 7、代码举例
 
+事务消息生产者
+
 ```java
+/**
+ * 事务消息生产者
+ */
+public class TransactionProducer {
+    public static void main(String[] args) throws MQClientException {
+        TransactionMQProducer producer = new TransactionMQProducer("wei-producer");
+        producer.setNamesrvAddr("localhost:9876");
+        ExecutorService executor = new ThreadPoolExecutor(2, 5, 10L, TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(2000), new ThreadFactory() {
+            @Override
+            public Thread newThread(Runnable r) {
+                Thread thread = new Thread(r, "client-transaction-mythread");
+                return thread;
+            }
+        });
+        // 给事务消息生产者设置线程池
+        producer.setExecutorService(executor);
+
+        // 给生产者添加线程监听器
+        producer.setTransactionListener(new ICBCTransactionListener());
+        producer.start();
+
+        String[] tags = {"TAGA", "TAGB", "TAGC"};
+        for (int i = 0; i < 3; i++) {
+            byte[] bytes = (("Hi" + i)).getBytes();
+            Message message = new Message("TTopic", tags[i], bytes);
+            // 发送事务消息
+            // 第二个参数用于指定在执行本地事务时要使用的业务参数
+            TransactionSendResult transactionSendResult = producer.sendMessageInTransaction(message,null);
+            System.out.println("发送结果: " + transactionSendResult.getSendStatus());
+        }
+    }
+}
 ```
+
+事务监听器
+
+```java
+/**
+ * 工行事务消息监听器
+ */
+public class ICBCTransactionListener implements TransactionListener {
+
+    // 回调操作方法
+    // 消息预提交以后会执行这个方法，完成本地事务
+    @Override
+    public LocalTransactionState executeLocalTransaction(Message message, Object o) {
+        System.out.println("预提交消息成功: " + message);
+        // 假设接收到TagA的消息就表示扣款成功，TagB的消息就是表示失败，TagC就是未知
+        if (StringUtils.equals("TAGA",message.getTags())){
+            return LocalTransactionState.COMMIT_MESSAGE;
+        }else if (StringUtils.equals("TAGB",message.getTags())){
+            return LocalTransactionState.ROLLBACK_MESSAGE;
+        }else {
+            return LocalTransactionState.UNKNOW;
+        }
+    }
+
+    // 消息回查方法
+    // 引发消息回查的原因最常见的有两个：
+    // 1) 回调操作返回UNKNWON
+    // 2) 事务协调者（TC） 也就是Broker 没有收到 事务管理器（TM） 也就是Producer 的最终全局指令
+    @Override
+    public LocalTransactionState checkLocalTransaction(MessageExt messageExt) {
+        System.out.println("执行消息回查:" + messageExt.getTags());
+        return LocalTransactionState.COMMIT_MESSAGE;
+    }
+}
+```
+
+消息消费者
+
+```java
+public class CommonConsumer {
+    public static void main(String[] args) throws MQClientException {
+        DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("wei-consumer");
+        consumer.setNamesrvAddr("localhost:9876");
+        // 设置从队列第一条消息开始消费
+        consumer.setConsumeFromWhere(ConsumeFromWhere.CONSUME_FROM_FIRST_OFFSET);
+        consumer.subscribe("TTopic","*");
+
+        // 注册消息监听器
+        consumer.registerMessageListener(new MessageListenerConcurrently() {
+            @Override
+            public ConsumeConcurrentlyStatus consumeMessage(List<MessageExt> list, ConsumeConcurrentlyContext consumeConcurrentlyContext) {
+                // 逐条消费消息
+                for (MessageExt messageExt : list) {
+                    System.out.println(messageExt);
+                }
+                // 返回消费状态：消费成功
+                return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
+            }
+        });
+        consumer.start();
+        System.out.println("consumer start !");
+    }
+}
+```
+
+
 
 ### 五、批量消息
 
@@ -2239,12 +2340,102 @@ Consumer的`pullBatchSize`属性与`consumeMessageBatchMaxSize`属性是否设�
 **定义消息列表分割器**
 
 ```java
+/**
+ * 消息列表分割器：其只会处理每条消息的大小不超过4M的情况
+ * 若存在某条消息，其本身大小大于4M，则消息列表分割器无法处理
+ * 其直接将这条消息构成一个子列表返回，不会再去分割
+ */
+public class MessageListSplitter implements Iterator<List<Message>> {
+
+    // 指定消费极限值为4M
+    private final int SIZE_LIMIT = 1024 * 4 * 1024;
+
+    // 存放所有要发送的消息
+    private final List<Message> messages;
+
+    // 批量发送消息的小集合起始索引
+    private int currIndex;
+
+    public MessageListSplitter(List<Message> messages) {
+        this.messages = messages;
+    }
+
+    @Override
+    public boolean hasNext() {
+        // 判断当前开始的消息索引要小于消息总数
+        return currIndex < messages.size();
+    }
+
+    @Override
+    public List<Message> next() {
+        int nextIndex = currIndex;
+        // 记录这一次要发送消息的列表大小
+        int totalSize = 0;
+        for (; nextIndex < messages.size(); nextIndex++) {
+            // 获取当前遍历消息
+            Message message = messages.get(nextIndex);
+            // 统计当前遍历的message的大小
+            int tmpSize = message.getTopic().length() + message.getBody().length;
+            Map<String, String> properties = message.getProperties();
+            for (Map.Entry<String, String> entry : properties.entrySet()) {
+                tmpSize += entry.getKey().length() + entry.getValue().length();
+            }
+            tmpSize += 20;
+
+            // 判断当前消息本身是否大于4M
+            if (tmpSize > SIZE_LIMIT) {
+                if (nextIndex - currIndex == 0) {
+                    nextIndex++;
+                }
+                break;
+            }
+            if (tmpSize + totalSize > SIZE_LIMIT) {
+                break;
+            } else {
+                totalSize += tmpSize;
+            }
+        }
+        // 获取当前message列表的子集合[currIndex,nextIndex]
+        List<Message> messageList = this.messages.subList(currIndex, nextIndex);
+        // 下次开始遍历时的索引
+        currIndex = nextIndex;
+        return messageList;
+    }
+}
 ```
 
 **定义批量消息生产者**
 
 ```java
+/**
+ * 批量消息生产者
+ */
+public class BatchProducer {
+    public static void main(String[] args) throws MQClientException {
+        DefaultMQProducer producer = new DefaultMQProducer("wei-batch-producer");
+        producer.setNamesrvAddr("localhost:9876");
+        // 指定要发送的消息的最大大小，默认是4M 仅修改这个是没有的，还要修改broker加载配置文件中的 maxMessageSize 配置属性
+        producer.setMaxMessageSize(8 * 1024 * 1024);
 
+        producer.start();
+
+        List<Message> messages = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            byte[] bytes = (("hi" + i)).getBytes();
+            Message message = new Message("TopicBatch", "*", bytes);
+            messages.add(message);
+        }
+        MessageListSplitter messageListSplitter = new MessageListSplitter(messages);
+        while (messageListSplitter.hasNext()) {
+            try {
+                List<Message> messageList = messageListSplitter.next();
+                producer.send(messageList);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
 ```
 
 **定义批量消息消费者**
