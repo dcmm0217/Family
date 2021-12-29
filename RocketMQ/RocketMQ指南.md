@@ -2474,4 +2474,332 @@ public class BatchConsumer {
 
 ### 六、消息过滤
 
-消费者在进行消息订阅时，除了可以指定要订阅消息的Topic外。
+消费者在进行消息订阅时，除了可以指定要订阅消息的Topic外，还可以对指定Topic中的消息根据指定条件进行过滤，即可以订阅比Topic更加细粒度的消息类型。
+
+对于指定Topic消息的过滤有两种过滤方式:Tag过滤与SQL过滤
+
+#### 1、Tag过滤
+
+通过Consumer的subscribe()方法指定要订阅消息的Tag，如果订阅多个Tag的消息，Tag间使用**或运算符**（双竖线||）连接。
+
+```java
+DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("wei-consumer");
+consumer.subscribe("TTopic","TagA || TagB || TagC");
+```
+
+
+
+#### 2、SQL过滤
+
+SQL过滤是一种通过特定表达式对事先埋入到消息中的`用户属性`进行筛选过滤的方式。通过SQL过滤，可以实现对消息的复杂过滤。不过，只有使用**PUSH模式**的消费者才能使用SQL过滤。
+
+SQL过滤表达式中支持多种常量类型与运算符。
+
+支持的常量类型：
+
+- 数值：比如：123，3.1415
+- 字符：必须使用单引号包裹起来，比如:'abc'
+- 布尔：TRUE 或 FALSE
+- NULL：特殊的常量，表示空
+
+支持的运算符有：
+
+- 数值比较： > , >= , < , <= BETWEEN , = 
+- 字符比较：= ，<> ，IN
+- 逻辑运算：AND，OR，NOT
+- NULL判断：IS NULL 或者 IS NOT NULL
+
+默认情况下Broker没有开启消息的SQL过滤功能，需要在Broker加载的配置文件中添加如下属性，以开启该功能。
+
+```properties
+enablePropertyFilter = true
+```
+
+在启动Broker时需要指定这个修改过的配置文件。例如对于单机Broker的启动，其修改的配置文件时conf/broker.conf，启动时使用如下命令：
+
+```properties
+sb bin/mqbroker -n localhost:9876 -c conf/broker.conf &
+```
+
+
+
+#### 3、代码举例
+
+**定义Tag过滤Producer**
+
+```java
+public class FilterByTagProducer {
+    public static void main(String[] args) throws Exception {
+        DefaultMQProducer producer = new DefaultMQProducer("wei-producer");
+        producer.setNamesrvAddr("localhost:9876");
+        producer.start();
+        String[] tags = {"TAGA","TAGB","TAGC"};
+
+        for (int i = 0; i < 3; i++) {
+            byte[] bytes = ("Hi" + i).getBytes();
+            String tag = tags[i%tags.length];
+            Message message = new Message("myTopic",tag,bytes);
+            SendResult sendResult = producer.send(message);
+            System.out.println(sendResult);
+        }
+    }
+}
+```
+
+**定义Tag过滤Consumer**
+
+```java
+public class FilterByTagConsumer {
+    public static void main(String[] args) throws MQClientException {
+        DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("wei-consumer");
+        consumer.setNamesrvAddr("localhost:9876");
+        consumer.setConsumeFromWhere(ConsumeFromWhere.CONSUME_FROM_FIRST_OFFSET);
+
+        consumer.subscribe("myTopic","TAGA || TAGB");
+
+        consumer.registerMessageListener(new MessageListenerConcurrently() {
+            @Override
+            public ConsumeConcurrentlyStatus consumeMessage(List<MessageExt> list, ConsumeConcurrentlyContext consumeConcurrentlyContext) {
+                for (MessageExt messageExt : list) {
+                    System.out.println(messageExt);
+                }
+                return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
+            }
+        });
+        consumer.start();
+        System.out.println("Consumer started !");
+    }
+}
+```
+
+**定义SQL过滤Producer**
+
+```java
+public class FilterBySqlProducer {
+    public static void main(String[] args) throws Exception {
+        DefaultMQProducer producer = new DefaultMQProducer("wei-producer");
+        producer.setNamesrvAddr("localhost:9876");
+        producer.start();
+
+        for (int i = 0; i < 3; i++) {
+            byte[] bytes = ("Hi" + i).getBytes();
+            Message message = new Message("myTopic", "myTag", bytes);
+            // 设置消息属性，便于过滤
+            message.putUserProperty("age", i + "");
+            SendResult sendResult = producer.send(message);
+            System.out.println(sendResult);
+        }
+        producer.shutdown();
+    }
+}
+```
+
+**定义SQL过滤Consumer**
+
+```java
+public class FilterBySqlConsumer {
+    public static void main(String[] args) throws MQClientException {
+        DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("wei-consumer");
+        consumer.setNamesrvAddr("localhost:9876");
+        consumer.setConsumeFromWhere(ConsumeFromWhere.CONSUME_FROM_FIRST_OFFSET);
+
+        consumer.subscribe("myTopic",MessageSelector.bySql("age between 0 and 6"));
+        
+        consumer.registerMessageListener(new MessageListenerConcurrently() {
+            @Override
+            public ConsumeConcurrentlyStatus consumeMessage(List<MessageExt> list, ConsumeConcurrentlyContext consumeConcurrentlyContext) {
+                for (MessageExt messageExt : list) {
+                    System.out.println(messageExt);
+                }
+                return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
+            }
+        });
+        consumer.start();
+        System.out.println("Consumer started !");
+    }
+}
+```
+
+
+
+### 七、消息发送重试机制
+
+#### 1、说明
+
+Producer对发送失败的消息进行重新发送的机制，称为消息发送重试机制，也称为消息重投机制。
+
+==对于消息重投，需要注意以下几点==：
+
+- 生产者在发送消息时，若采用`同步或异步发送方式`，发送失败`会重试`,但oneway消息发送方式发送失败是没有重试机制的
+- 只有普通消息具有发送重试机制，顺序消息是没有的
+
+- 消息重投机制可以保证消息尽可能发送成功、不丢失，但可能会造成消息重复。消息重复在rocketmq中是无法避免的问题。
+- 消息重复在一般情况下不会发生，当出现消息量大、网络抖动、消息重复就会称为大概率事件。
+- producer主动重发、consumer负载变化（发送Rebalance，不会导致消息重复，但可能出现重复消费）也会导致重复消息。
+- 消息重复无法避免，但要避免消息的重复消费
+- 避免消息重复消费的解决方案是，为消息添加唯一标识（例如消息key），使消费者对消息进行消费判断来避免重复消费
+- 消息发送重试有三种策略可以选择：同步发送失败策略、异步发送失败策略、消息刷盘失败策略
+
+
+
+#### 2、同步发送失败策略
+
+对于普通消息，消息发送默认采用round-robin策略来选择所发送到的队列。如果发送失败，默认重试2次。但在重试时是不会选择上次发送失败的broker，而是选择其他Broker。当然，若只有一个Broker其也只能发送到该Broker，但其会尽量发送该Broker上的其他Queue。
+
+```java
+// 创建一个producer，参数为Producer Group名称 
+DefaultMQProducer producer = new DefaultMQProducer("wei-consumer");
+// 指定nameServer地址
+producer.setNamesrvAddr("localhost:9876");
+// 设置同步发送失败时重试发送的次数，默认为2次 
+producer.setRetryTimesWhenSendFailed(3);
+// 设置发送超时时限为5s，默认为3s
+producer.setSendMsgTimeout(5000);
+```
+
+同时，Broker还具有`失败隔离`的功能，使Producer尽量选择未发生过发生失败的Broker作为目标Broker。其可以保证其他消息尽量不发送到问题Broker，为了提升消息发送效率，降低消息发送耗时。
+
+> 思考：让我们自己实现`失败隔离`功能，如何来做？
+>
+> 1）方案一：Producer中维护某JUC的Map集合，其key是发生失败的时间戳，value为Broker实例。Producer中还维护者一个Set集合，其中存放着所有未发生发送异常的Broker实例。选择目标Broker是从该Set集合中选择的。再定义一个定时任务，定期从Map集合中将长期未发生发送异常的Broker清理出去，并添加到Set集合。
+>
+> 2）方案二：为Producer中的Broker实例添加一个标识，例如是一个AtomicBoolean属性。只要改Broker上发生过发送异常，就将其置为true。选择目标Broker就是选择该属性值为false的Broker。再定义一个定时任务，定期将Broker的该属性置为false
+>
+> 3）方案三：为Producer中的Broker实例添加一个标识，例如是一个AtomicLong属性，只要该Broker上发生过发送异常，就使其值+1。选择目Broker值就是选择该属性值最小的Broker。若该值相同，采用轮询方式选择。
+
+如果超过重试次数，则抛出异常，由Producer去保证消息不丢。当然当生产者出现RemotingException、MQClinetException和MQBrokerException时，Producer会自动重投消息。
+
+
+
+#### 3、异步发送失败策略
+
+异步发送失败重试时，异步重试不会选择其他broker，仅在同一个broker上做重试，所以该策略无法保证消息不丢。
+
+```java
+DefaultMQProducer producer = new DefaultMQProducer("wei-consumer"); 
+producer.setNamesrvAddr("localhost:9876"); 
+// 指定异步发送失败后不进行重试发送  
+producer.setRetryTimesWhenSendAsyncFailed(0); 
+```
+
+
+
+#### 4、消息刷盘失败策略
+
+消息刷盘超时（Master或Slave）或slave不可用（slave在做数据同步时向master返回状态不是SEND_OK）时，默认是不会将消息重试发送到其他Broker的。不过，对于重要消息可以通过在Broker的配置文件设置retryAnotherBrokerWhenNotStoreOK属性为true来开启。
+
+
+
+### 八、消息消费重试机制
+
+#### 1、顺序消息的消费重试
+
+对于顺序消息，当Consumer消费消息失败后，为了保证消息的顺序性，其会自动不断地进行消息重试，直到消费成功。消费重试默认间隔时间为1000毫秒。重试期间应用会出现消息消费被阻塞地情况。
+
+```java
+DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("wei-consumer");
+// 顺序消息消费失效的消费重试时间间隔，单位毫秒，默认为1000，其取值范围为[10,30000]
+consumer.setSuspendCurrentQueueTimeMillis(100)
+```
+
+> 由于对顺序消息的重试是无休止的，不间断的，直至消费成功，所以，对于顺序消息的消费，务必要保证应用能够及时监控并处理消费失败的情况，避免消费被永久性阻塞。
+
+> 注意，顺序消息没有发送失败重试机制，但具有消费失败重试机制
+
+
+
+#### 2、无序消息的消费重试
+
+对于无序消息（普通消息、延时消息、事务消息），当Consumer消费消息失败时，可以通过设置返回状态达到消息重试的效果。不过需要注意，无序消息的重试`只对集群消费方式生效`，广播消费方式不提供失败重试特性。即对于广播消费，消费失败后，失败消息不再重试，继续消费后续消费。
+
+
+
+#### 3、消费重试次数与间隔
+
+对于`无序消息集群消费`下的重试消费，每条消息默认最多重试16次，但每次重试的间隔时间是不同的，会逐渐变长。每次重试的时间间隔如下
+
+![image-20211229175355933](https://gitee.com/huangwei0123/image/raw/master/img/image-20211229175355933.png)
+
+> 若一条消息在一直消费失败的前提下，将会在正常消费后的第`4小时46分`后进行第16次重试。若仍然失败，则将消息投递到`死信队列`
+
+> 修改消费重试次数
+>
+> ```java
+> DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("wei-consumer"); 
+> // 修改消费重试次数 
+> consumer.setMaxReconsumeTimes(10);
+> ```
+>
+> 对于修改过的重试次数，将按照以下策略执行：
+>
+> - 若修改值小于16，则按照指定间隔进行重试
+> - 若修改值大于16，则超过16次的重试时间间隔均为2小时
+
+对于Consumer Group，若仅修改了一个Consumer的消费重试次数，则会应用到该Group中所有其他Consumer实例。若出现多个Consumer均做了修改的情况，则采用覆盖方式生效。即最后被修改的值会覆盖前面设置的值。
+
+
+
+#### 4、重试队列
+
+对于需要重试消费的消息，并不是Consumer在等待了指定时长后再次去拉取原来的消息进行消费，而是将这些需要重试消费的消息放入到了一个特殊Topic的队列中，而后进行再次消费的。这个特殊队列就是重试队列。
+
+当出现需要进行重试消费的消息时，Broker会为每隔消费者组都设置一个Topic名称为`%RETRY%consumerGroup@consumerGroup`的重试队列。
+
+> 1）这个重试队列是针对消息才组的，而不是针对每个Topic设置的（一个Topic的消息可以让多个消费者组进行消费，所以会为这些消费者组各创建一个重试队列）
+>
+> 2）只有当出现需要进行重试消费的消息时，才会为该消费者组创建重试队列
+
+![image-20211229191034689](https://gitee.com/huangwei0123/image/raw/master/img/image-20211229191034689.png)
+
+> 注意，消费重试的时间间隔与`延时消费`的`延时等级`十分相似，除了没有延时等级的前两个时间外，其他的时间都是相同的
+
+Broker对于重试消息的处理是通过`延时消息`实现的。先将消息保存到`SCHEDULE_TOPIC_XXXX`延迟队列中，延迟时间到后，会将消息投递到
+
+`%RETRY%consumerGroup@consumerGroup`重试队列中。
+
+
+
+#### 5、消费重试配置方式
+
+![image-20211229191743414](https://gitee.com/huangwei0123/image/raw/master/img/image-20211229191743414.png)
+
+集群消费方式下，消息消费失败后若希望消费重试，则需要在监听器接口的实现中明确进行如下三种方式之一的配置：
+
+- 方式一：返回`ConsumeConcurrentlyStatus.RECONSUME_LATER`（推荐）
+- 方式二：返回NULL
+- 方式三：抛出异常
+
+
+
+#### 6、消费不重试配置方式
+
+![image-20211229192114750](https://gitee.com/huangwei0123/image/raw/master/img/image-20211229192114750.png)
+
+集群消费方式下，消息消费失败后，若不希望消费重试，则在捕获到异常后同样也返回与消费成功后的相同结果，即`ConsumeConcurrentlyStatus.CONSUME_SUCCESS`，则不进行消费重试
+
+
+
+### 九、死信队列
+
+#### 1、什么是死信队列
+
+当一条消息初次消费失败，消息队列会自动进行消费重试；**到达最大重试次数后，若消费依然失败**，则表明消费者在正常情况下无法正确地消费该消息，此时，消息队列不会立即将消息丢弃，而是将其发送到该消费者对应地特殊队列中。这个队列就是==死信队列（Dead-Letter Queue）==，而其中地消息则称为==死信消息(Dead-Letter Message)==;
+
+> 死信队列是用于处理无法被正常消费的消息的
+
+
+
+#### 2、死信队列的特征
+
+死信队列有如下特征
+
+- 死信队列中的消息不会再被消费者正常消费，即 ==死信队列对于消费者来说是不可见的==
+- 死信存储有效期与正常消息相同，均为3天（commitlog文件的过期时间），3天后会被自动删除
+- 死信队列就是有一个特殊的Topic，名称为`%DLQ%consumerGroup@consumerGroup`，即每个消费者组都有一个死信队列
+- 如果一个消费者组未产生死信消息，则不会为其创建相应的死信队列
+
+
+
+#### 3、死信消息的处理
+
+实际上，当一条消息进入死信队列，就意味着系统中某个地方出现了问题，从而导致消费者无法正常消费该消息，比如代码中原本就存在BUG。因此，对于死信消息，通常需要开发人员进行特殊处理。==最关键的步骤是要排查可疑因素，解决代码中可能存在的BUG，然后再将原来的死信消息再次进行投递消费==
