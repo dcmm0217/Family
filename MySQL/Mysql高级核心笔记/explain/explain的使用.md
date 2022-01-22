@@ -293,3 +293,70 @@ mysqladmin -uroot -p flush-logs slow
 ```
 
 > 提示：慢查询日志都是使用mysqladmin flush-logs命令来删除重建的。使用时一定要注意，一旦执行了这个命令，慢查询日志都只存储到新的日志文件中，如果需要旧的查询日志，就必须事先备份。
+
+
+
+## 5、查看SQL执行成本
+
+```sql
+show variables like 'profiling';
+```
+
+![image-20220123003655697](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123003655697.png)
+
+通过设置` profiling='ON’ `来开启 show profile：
+
+```sql
+mysql > set profiling = 'ON';
+```
+
+![image-20220123003721970](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123003721970.png)
+
+然后执行相关的查询语句。接着看下当前会话都有哪些 profiles，使用下面这条命令：
+
+```sql
+mysql > show profiles;
+```
+
+![image-20220123003737932](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123003737932.png)
+
+你能看到当前会话一共有 2 个查询。如果我们想要查看最近一次查询的开销，可以使用：
+
+```sql
+mysql > show profile;
+```
+
+![image-20220123003756777](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123003756777.png)
+
+```sql
+mysql> show profile cpu,block io for query 2;
+```
+
+![image-20220123003810021](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123003810021.png)
+
+show profile的常用查询参数:
+
+- ALL:显示所有开销信息
+- BLOCK IO：显示块IO开销
+- CONTEXT SWITCHES：上下文切换开销
+- CPU：显示CPU开销信息
+- IPC：显示发送和接收开销信息
+- MEMORY：显示内存开销信息
+- PAGE FAULTS：显示页面错误开销信息
+- SOURCE：显示Source_function，Source_file,Source_line相关开销信息
+- SWAPS:显示交换次数开销信息
+
+==日常开发需要注意的结论：==
+
+**1、`converting help to myisam`：查询结果太大，内存不够，数据往磁盘上搬了**
+
+**2、`creating tmp table`：创建临时表，先拷贝数据到临时表，用完后再删除临时表**
+
+**3、`copying to tmp table on disk`：把内存中临时表复制到磁盘上，警惕。**
+
+**4、`locked ` 被锁定**
+
+**如果再show profile诊断结果中出现了以上四条结论中的任何一条， 则sql语句需要优化。**
+
+**注意：不过show profile命令将被弃用，我们可以从 information_schema中的profiling数据表去进行查看。**
+
