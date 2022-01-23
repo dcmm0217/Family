@@ -360,3 +360,250 @@ show profile的常用查询参数:
 
 **注意：不过show profile命令将被弃用，我们可以从 information_schema中的profiling数据表去进行查看。**
 
+
+
+## 6、分析查询语句：EXPLAIN
+
+#### 6.1 基本语法
+
+````sql
+EXPLAIN SELECT select_options
+````
+
+如果我们想看看某个查询的执行计划的话，可以在具体的查询语句前边加一个 EXPLAIN ，就像这样：
+
+```sql
+mysql> EXPLAIN SELECT 1
+```
+
+EXPLAIN 语句输出的各个列的作用如下：
+
+![image-20220123170127725](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123170127725.png)
+
+#### 6.2 准备数据
+
+**1、建表**
+
+```sql
+CREATE TABLE s1 (
+	id INT AUTO_INCREMENT,
+	key1 VARCHAR ( 100 ),
+	key2 INT,
+	key3 VARCHAR ( 100 ),
+	key_part1 VARCHAR ( 100 ),
+	key_part2 VARCHAR ( 100 ),
+	key_part3 VARCHAR ( 100 ),
+	common_field VARCHAR ( 100 ),
+	PRIMARY KEY ( id ),
+	INDEX idx_key1 ( key1 ),
+	UNIQUE INDEX idx_key2 ( key2 ),
+	INDEX idx_key3 ( key3 ),
+INDEX idx_key_part ( key_part1, key_part2, key_part3 ) 
+) ENGINE = INNODB CHARSET = utf8;
+```
+
+```sql
+CREATE TABLE s2 (
+	id INT AUTO_INCREMENT,
+	key1 VARCHAR ( 100 ),
+	key2 INT,
+	key3 VARCHAR ( 100 ),
+	key_part1 VARCHAR ( 100 ),
+	key_part2 VARCHAR ( 100 ),
+	key_part3 VARCHAR ( 100 ),
+	common_field VARCHAR ( 100 ),
+	PRIMARY KEY ( id ),
+	INDEX idx_key1 ( key1 ),
+	UNIQUE INDEX idx_key2 ( key2 ),
+	INDEX idx_key3 ( key3 ),
+	INDEX idx_key_part ( key_part1, key_part2, key_part3 ) 
+) ENGINE = INNODB CHARSET = utf8;
+```
+
+**2、设置参数 log_bin_trust_function_creators**
+
+创建函数，假如报错，需开启如下命令：允许创建函数设置：
+
+```sql
+set global log_bin_trust_function_creators=1; # 不加global只是当前窗口有效。
+```
+
+**3、创建函数**
+
+```sql
+DELIMITER //
+CREATE FUNCTION rand_string1 ( n INT ) RETURNS VARCHAR ( 255 ) #该函数会返回一个字符串
+BEGIN
+	DECLARE
+		chars_str VARCHAR ( 100 ) DEFAULT 'abcdefghijklmnopqrstuvwxyzABCDEFJHIJKLMNOPQRSTUVWXYZ';
+	DECLARE
+		return_str VARCHAR ( 255 ) DEFAULT '';
+	DECLARE
+		i INT DEFAULT 0;
+	WHILE
+			i < n DO
+			
+			SET return_str = CONCAT(
+				return_str,
+			SUBSTRING( chars_str, FLOOR( 1+RAND ()* 52 ), 1 ));
+		
+		SET i = i + 1;
+		
+	END WHILE;
+	RETURN return_str;
+	
+END // 
+DELIMITER;
+```
+
+**4、创建存储过程**
+
+创建往s1表中插入数据的存储过程：
+
+```sql
+DELIMITER //
+CREATE PROCEDURE insert_s1 (
+	IN min_num INT ( 10 ),
+	IN max_num INT ( 10 )) BEGIN
+	DECLARE
+		i INT DEFAULT 0;
+	
+	SET autocommit = 0;
+	REPEAT
+			
+			SET i = i + 1;
+		INSERT INTO s1
+		VALUES
+			(
+				( min_num + i ),
+				rand_string1 ( 6 ),
+				( min_num + 30 * i + 5 ),
+				rand_string1 ( 6 ),
+				rand_string1 ( 10 ),
+				rand_string1 ( 5 ),
+				rand_string1 ( 10 ),
+			rand_string1 ( 10 ));
+		UNTIL i = max_num 
+	END REPEAT;
+	COMMIT;
+	
+END // 
+DELIMITER;
+```
+
+创建往s2表中插入数据的存储过程：
+
+```sql
+
+DELIMITER //
+CREATE PROCEDURE insert_s2 (
+	IN min_num INT ( 10 ),
+	IN max_num INT ( 10 )) BEGIN
+	DECLARE
+		i INT DEFAULT 0;
+	
+	SET autocommit = 0;
+	REPEAT
+			
+			SET i = i + 1;
+		INSERT INTO s2
+		VALUES
+			(
+				( min_num + i ),
+				rand_string1 ( 6 ),
+				( min_num + 30 * i + 5 ),
+				rand_string1 ( 6 ),
+				rand_string1 ( 10 ),
+				rand_string1 ( 5 ),
+				rand_string1 ( 10 ),
+			rand_string1 ( 10 ));
+		UNTIL i = max_num 
+	END REPEAT;
+	COMMIT;
+	
+END // 
+DELIMITER;
+```
+
+**5、调用存储过程**
+
+```sql
+CALL insert_s1(10001,10000);
+
+CALL insert_s2(10001,10000);
+
+```
+
+#### 6.3 EXPLAIN各列的作用
+
+> 1、table
+
+不论我们的查询语句有多复杂，里面包含了多少个表，到最后也是需要对每个表进行`单表访问`的，所以MYSQL规定==EXPLAIN语句输出的每条记录都对应着某个单表的访问方法==，该条记录的table列代表着该表的表名（有时不是真实的表名字，可能是简称）
+
+```sql
+EXPLAIN select * from s1;
+```
+
+![image-20220123180559997](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123180559997.png)
+
+这个查询语句只涉及对s1表的单表查询，所以`EXPLAIN`输出只有1条记录，其中的table列的值是s1，表明这条记录是用来说明对s1表的单表访问方法的。
+
+下边我们看一个连接查询的执行计划：
+
+```sql
+EXPLAIN select * from s1 inner join s2;
+```
+
+![image-20220123183252069](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123183252069.png)
+
+> 2、Id
+
+我们写的查询语句一般都是以`select`关键字开头，比较简单的查询语句里只有一个`select`关键字，比如下边这个查询语句：
+
+```sql
+SELECT * FROM s1 WHERE key1 = 'a';
+```
+
+稍微复杂一点的连接查询中也只有一个 SELECT 关键字，比如：
+
+```sql
+SELECT * FROM s1 INNER JOIN s2
+ON s1.key1 = s2.key1
+WHERE s1.common_field = 'a';
+```
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE key1 = 'a';
+```
+
+![image-20220123183709306](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123183709306.png)
+
+```sql
+# 查询优化器可能对涉及子查询的查询语句进行重写，转变为多表查询的操作 
+EXPLAIN SELECT * FROM s1 WHERE key1 IN (SELECT key2 FROM s2 WHERE common_field
+= 'a');
+```
+
+![image-20220123190740814](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123190740814.png)
+
+```sql
+# union 会默认去重，union all 不会
+EXPLAIN SELECT * FROM s1 UNION SELECT * FROM s2;
+```
+
+![image-20220123191136149](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123191136149.png)
+
+```sql
+EXPLAIN SELECT * FROM s1 UNION ALL SELECT * FROM s2;
+```
+
+![image-20220123191159743](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123191159743.png)
+
+小结:
+
+- id如果相同，可以认为是一组，从上往下顺序执行
+- 在所有组中，id值越大，优先级越高，越先执行
+- 关注点：id号每个号码，表示一趟独立查询，一个sql的查询趟数越少越好。
+
+> 3、select_type
+
