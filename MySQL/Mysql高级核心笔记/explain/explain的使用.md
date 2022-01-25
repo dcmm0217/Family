@@ -536,7 +536,7 @@ CALL insert_s2(10001,10000);
 
 #### 6.3 EXPLAIN各列的作用
 
-> 1、table
+##### 1、table
 
 不论我们的查询语句有多复杂，里面包含了多少个表，到最后也是需要对每个表进行`单表访问`的，所以MYSQL规定==EXPLAIN语句输出的每条记录都对应着某个单表的访问方法==，该条记录的table列代表着该表的表名（有时不是真实的表名字，可能是简称）
 
@@ -556,7 +556,7 @@ EXPLAIN select * from s1 inner join s2;
 
 ![image-20220123183252069](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123183252069.png)
 
-> 2、Id
+##### 2、Id
 
 我们写的查询语句一般都是以`select`关键字开头，比较简单的查询语句里只有一个`select`关键字，比如下边这个查询语句：
 
@@ -605,5 +605,548 @@ EXPLAIN SELECT * FROM s1 UNION ALL SELECT * FROM s2;
 - 在所有组中，id值越大，优先级越高，越先执行
 - 关注点：id号每个号码，表示一趟独立查询，一个sql的查询趟数越少越好。
 
-> 3、select_type
+##### 3、select_type ✳
+
+一条大的查询语句里边可以包含若干个SELECT关键字，`每个SELECT关键字代表着一个小的查询语句`，而每个SELECT关键字的FROM字句中，都可以包含若干张表（这些表是用来做连接查询的），`每一张表都对应着执行计划输出中的一条记录`，对于在同一个SELECT关键字中的表来说，它们的id是相同的。
+
+MYSQL为每一个关键字代表的小查询定义了一个称之为`select_type`属性，意思是我们只要知道了某个小查询的`select_types`属性，就知道了这个`小查询在整个大查询中扮演了一个什么角色`，我们看一下，select_type都能取哪些值。
+
+![image-20220124083635845](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124083635845.png)
+
+具体分析如下：
+
+```sql
+EXPLAIN SELECT * FROM s1;
+```
+
+![image-20220124083806018](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124083806018.png)
+
+当然，连接查询也算是 SIMPLE 类型，比如:
+
+```sql
+EXPLAIN SELECT * FROM s1 INNER JOIN s2;
+```
+
+![image-20220124083826630](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124083826630.png)
+
+> PRIMARY
+
+```sql
+EXPLAIN SELECT * FROM s1 UNION SELECT * FROM s2;
+```
+
+![image-20220124083927951](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124083927951.png)
+
+> SUBQUERY
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE key1 IN (SELECT key1 FROM s2) OR key3 = 'a';
+```
+
+![image-20220124083958683](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124083958683.png)
+
+> DEPENDENT SUBQUERY 
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE key1 IN (SELECT key1 FROM s2 WHERE s1.key2 = s2.key2) OR key3 = 'a';
+```
+
+![image-20220124084023966](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124084023966.png)
+
+> DEPENDENT UNION 
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE key1 IN (SELECT key1 FROM s2 WHERE key1 = 'a' UNION SELECT key1 FROM s1 WHERE key1 = 'b');
+```
+
+![image-20220124084043300](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124084043300.png)
+
+> DERIVED
+
+```sql
+ EXPLAIN SELECT * FROM (SELECT key1, count(*) as c FROM s1 GROUP BY key1) AS derived_s1 where c > 1;
+```
+
+![image-20220124084105929](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124084105929.png)
+
+> MATERIALIZED
+
+```sql
+ EXPLAIN SELECT * FROM s1 WHERE key1 IN (SELECT key1 FROM s2);
+```
+
+![image-20220124084142531](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124084142531.png)
+
+##### 4、type✳
+
+完整的访问方法如下：` system `、` const `、` eq-ref `, `ref `,` fulltext `,` ref-or-null `, ` index-merge `,` unique-subquery `,` index-subquery `, ` range `, ` index `,` ALL `
+
+我们详细解释一下：
+
+- **system**
+
+当**表中只有一条记录并且该表使用的存储引擎的统计数据是精确**的，比如MyIsam，Mermory，那么对该表的访问方法就是system，比方说我们新建一个表，插入一条数据。
+
+```sql
+CREATE TABLE t(i int) Engine=MyISAM;
+
+INSERT INTO t VALUES(1);
+```
+
+然后我们看一下查询这个表的执行计划：
+
+```sql
+EXPLAIN SELECT * FROM t;
+```
+
+![image-20220124085223270](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085223270.png)
+
+- **const**
+
+**当我们根据主键或者唯一索引、二级索引与常数进行等值匹配的时候，对单表的访问方法就是 const**
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE id = 10005;
+```
+
+![image-20220124085252611](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085252611.png)
+
+- **eq_ref**
+
+在连接查询时，**如果被驱动表时通过主键或者唯一索引、二级索引等值匹配的方式进行访问的（如果该主键或者二级索引是联合索引的华，所有索引列都必须进行等值比较），则对该对该驱动表的访问方法就是 eq_ref**
+
+```sql
+EXPLAIN SELECT * FROM s1 INNER JOIN s2 ON s1.id = s2.id;
+```
+
+![image-20220124085317331](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085317331.png)
+
+从执行计划的结果中可以看出，**MySQL打算将s2作为驱动表，s1作为被驱动表**，重点关注s1的访问方法是 eq_ref ，表明在访问s1表的时候可以 通过主键的等值匹配 来进行访问。
+
+- **ref**
+
+**当通过普通的二级索引与常量进行等值匹配时来查询某个表，那么对表的访问方法就是ref**
+
+```sql
+ EXPLAIN SELECT * FROM s1 WHERE key1 = 'a';
+```
+
+![image-20220124085412155](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085412155.png)
+
+- **ref_or_null**
+
+**当对普通二级索引进行等值匹配查询，该索引列也可以是NULL时，那么对该表的访问方法就可能是ref_or_null**
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE key1 = 'a' OR key1 IS NULL;
+```
+
+![image-20220124085439903](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085439903.png)
+
+- **index_merge** 
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE key1 = 'a' OR key3 = 'a';
+```
+
+![image-20220124085507076](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085507076.png)
+
+从执行计划的 `type `列的值是 `index_merge `就可以看出，MySQL 打算使用索引合并的方式来执行对 s1 表的查询
+
+- **unique_subquery** 
+
+**如果针对一些IN子查询语句中，查询优化器决定将IN子查询转换成EXISTS子查询，而且子查询可以使用主键进行等值匹配的华，那么该子查询的执行计划的type就是unique_subquery**
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE key2 IN (SELECT id FROM s2 where s1.key1 = s2.key1) OR key3 = 'a';
+```
+
+![image-20220124085556102](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085556102.png)
+
+- **index_subquery**
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE common_field IN (SELECT key3 FROM s2 where s1.key1 = s2.key1) OR key3 = 'a';
+```
+
+![image-20220124085623681](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085623681.png)
+
+- **range**
+
+**如果使用索引获取某些范围区间的记录，那么久可能使用到range访问方法**
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE key1 IN ('a', 'b', 'c');
+```
+
+![image-20220124085653653](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085653653.png)
+
+- **index**
+
+**当我们可以使用索引覆盖，但需要扫描全部的索引记录时，该表的访问方法就是index**
+
+```sql
+EXPLAIN SELECT key_part2 FROM s1 WHERE key_part3 = 'a';
+```
+
+![image-20220124085722888](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085722888.png)
+
+- ALL
+
+全表扫描type=all
+
+```sql
+EXPLAIN SELECT * FROM s1;
+```
+
+![image-20220124085743510](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085743510.png)
+
+结果值从最好到最坏依次是：
+
+> **system >  const  >  eq-ref  > ref** >
+>
+> fulltext > ref_or_null > index_merge > unique_subquery > index_subquery >
+>
+> **range > index > ALL**
+
+==**SQL性能优化的目标：至少要达到 range级别，要求是 ref 级别，最好是 consts级别。（阿里巴巴开发手册要求）**==
+
+##### 5、possible_key 和 key
+
+possible_key ： 可能使用到的索引
+
+key：真正使用的索引
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE key1 > 'z' AND key3 = 'a';
+```
+
+![image-20220124091129038](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124091129038.png)
+
+##### 6、key_len✳
+
+**实际使用到的索引长度（字节数）**
+
+**帮你检查是否充分的利用上了索引 ，值是越大越好**
+
+==主要针对联合索引，有一定的参考意义==
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE id = 10005;
+```
+
+![image-20220124091246578](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124091246578.png)
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE key2 = 10126;
+```
+
+![image-20220124091822179](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124091822179.png)
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE key1 = 'a';
+```
+
+![image-20220124091939462](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124091939462.png)
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE key_part1 = 'a';
+```
+
+![image-20220124091952637](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124091952637.png)
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE key_part1 = 'a' AND key_part2 = 'b';
+```
+
+![image-20220124092008353](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124092008353.png)
+
+##### 7、ref
+
+**当使用索引列等值查询时，与索引列进行等值匹配的对象信息**
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE key1 = 'a';
+```
+
+![image-20220124092323736](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124092323736.png)
+
+```sql
+EXPLAIN SELECT * FROM s1 INNER JOIN s2 ON s1.id = s2.id;
+```
+
+![image-20220124092342301](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124092342301.png)
+
+```sql
+EXPLAIN SELECT * FROM s1 INNER JOIN s2 ON s2.key1 = UPPER(s1.key1);
+```
+
+![image-20220124093105568](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124093105568.png)
+
+##### 8、**rows**✳
+
+**预估的需要读取的记录条数（扫描行数）**，值越小越好
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE key1 > 'z';
+```
+
+![image-20220124093144576](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124093144576.png)
+
+##### **9、filtered** 
+
+**某个表经过搜索条件过滤后剩余记录条数的百分比**
+
+**如果使用的是索引执行的单表扫描，那么计算时需要估计出满足除使用索引，到对应索引的搜索条件外的其他搜索条件的记录有多少条。。**
+
+```sql
+ EXPLAIN SELECT * FROM s1 WHERE key1 > 'z' AND common_field = 'a';
+```
+
+![image-20220124124909633](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124124909633.png)
+
+```sql
+EXPLAIN SELECT * FROM s1 INNER JOIN s2 ON s1.key1 = s2.key1 WHERE s1.common_field = 'a';
+```
+
+![image-20220124124942982](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124124942982.png)
+
+##### 10、Extra✳
+
+额外补充的信息，包含不适合在其他列中显示但是十分重要的额外信息。我们可以通过这些额外信息来更准确的理解Mysql到底时如何执行给定的查询语句。Mysql提供的额外信息有好几十个，我们就不一一介绍了，所以我们只调比较重要的额外信息介绍给大家。
+
+- NO table used
+
+当查询语句没有FROM自居时将会提示该信息
+
+```sql
+EXPLAIN select 1;
+```
+
+- Impossible WHERE
+
+查询语句的WHERE子句永远为false时将会提示该额外信息
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE 1 != 1;
+```
+
+![image-20220124125409622](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124125409622.png)
+
+- Using where
+
+当我们使用全表扫描来执行某个表的查询，并且该语句的where字句中有针对该表的搜索条件时，在Extra列中会提示上述额外信息。
+
+```sql
+ EXPLAIN SELECT * FROM s1 WHERE common_field = 'a';
+```
+
+![image-20220124125617432](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124125617432.png)
+
+- Using index
+
+当我们的查询列表以及搜索条件中只包含属于某个索引的列，也就是可以使用覆盖索引的情况下。在EXTRA列中会提示该额外信息。
+
+比如说这个查询中需要用到`idx_key1`而不需要回表操作
+
+```sql
+EXPLAIN SELECT key1 FROM s1 WHERE key1 = 'a';
+```
+
+![image-20220124125824989](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124125824989.png)
+
+- using index conditions
+
+有些搜索条件中虽然出现了索引列，但却不能使用到索引，这就是索引下推
+
+```sql
+EXPLAIN SELECT * FROM s1 WHERE key1 > 'z' AND key1 LIKE '%b';
+```
+
+![image-20220124125959731](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124125959731.png)
+
+
+
+- Using join buffer (Block Nested Loop) 
+
+当被驱动表不能有效的利用索引来加快访问速度，Mysql一般会为其分配一块名叫`join buffer`的内存块来加快查询速度，也就是网门讲的`基于块的嵌套循环算法`
+
+```sql
+EXPLAIN SELECT * FROM s1 INNER JOIN s2 ON s1.common_field = s2.common_field;
+```
+
+![image-20220124130203314](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124130203314.png)
+
+- Using filesort
+
+如果某个查询需要使用文件排序的方式进行查询，就会在执行计划中显示Using filesort提示
+
+```sql
+EXPLAIN SELECT * FROM s1 ORDER BY key1 LIMIT 10;
+```
+
+![image-20220124130418422](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124130418422.png)
+
+- Using temporary
+
+Mysql借助临时表来完成一些功能，比如去重，排序之类的。
+
+如果在带有`distinct`,`group by`,`union`等字句查询过程中，如果不能有效的利用索引来完成查询，mysql很有可能会去建立内部临时表来执行查询，查询中如果使用到了内部的临时表，在效率上会有影响。额外信息中出现Using temporary
+
+```sql
+EXPLAIN SELECT DISTINCT common_field FROM s1;
+```
+
+![image-20220124130753376](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124130753376.png)
+
+#### 6.4 小结
+
+- EXPLAIN不考虑各种Cache
+- EXPLAIN不能显示MySQL在执行查询时所作的优化工作
+- EXPLAIN不会告诉你关于触发器、存储过程的信息或用户自定义函数对查询的影响情况
+- 部分统计信息是估算的，并非精确值
+
+## 7、EXPLAIN的进一步使用
+
+#### 7.1 EXPLAIN的四种输出格式
+
+这里谈谈EXPLAIN的输出格式。EXPLAIN可以输出四种格式： 传统格式 ， JSON格式 ， TREE格式 以及 可视化输出 。用户可以根据需要选择适用于自己的格式。
+
+一般采用传统格式即可，json格式会携带更多的信息。
+
+#### 7.2 SHOWWARINGS的使用
+
+查看Mysql优化器优化后的语句，默认会查看上一条执行的SQL被优化后的SQL
+
+```sql
+EXPLAIN SELECT s1.key1, s2.key1 FROM s1 LEFT JOIN s2 ON s1.key1 = s2.key1 WHERE s2.common_field IS NOT NULL;
+```
+
+![image-20220125102914117](https://gitee.com/huangwei0123/image/raw/master/img/image-20220125102914117.png)
+
+```mysql
+mysql> SHOW WARNINGS\G *************************** 1. row *************************** Level: Note Code: 1003 Message: /* select#1 */ select `atguigu`.`s1`.`key1` AS `key1`,`atguigu`.`s2`.`key1` AS `key1` from `atguigu`.`s1` join `atguigu`.`s2` where ((`atguigu`.`s1`.`key1` = `atguigu`.`s2`.`key1`) and (`atguigu`.`s2`.`common_field` is not null)) 1 row in set (0.00 sec)
+```
+
+## 8、分析优化器执行计划：trace
+
+```sql
+SET optimizer_trace="enabled=on",end_markers_in_json=on;
+
+set optimizer_trace_max_mem_size=1000000;
+```
+
+开启以后，可分析如下语句：
+
+```
+SELECT   INSERT  DELETE
+REPLACE  UPDATE  EXPLAIN
+SET      DECLARE  CASE
+IF   RETURN    CALL
+```
+
+测试：执行如下SQL语句
+
+```sql
+select * from student where id < 10;
+```
+
+最后， 查询 information_schema.optimizer_trace 就可以知道MySQL是如何执行SQL的
+
+```mysql
+select * from information_schema.optimizer_trace\G
+```
+
+![image-20220125103428694](https://gitee.com/huangwei0123/image/raw/master/img/image-20220125103428694.png)
+
+
+
+![image-20220125103452964](https://gitee.com/huangwei0123/image/raw/master/img/image-20220125103452964.png)
+
+![image-20220125103506197](https://gitee.com/huangwei0123/image/raw/master/img/image-20220125103506197.png)
+
+![image-20220125103519218](https://gitee.com/huangwei0123/image/raw/master/img/image-20220125103519218.png)
+
+## 9、Mysql监控分析视图-sys schema
+
+#### 9.1 视图摘要
+
+**1.** **主机相关：**以host_summary开头，主要汇总了IO延迟的信息。
+
+**2. Innodb****相关：**以innodb开头，汇总了innodb buffer信息和事务等待innodb锁的信息。
+
+**3. I/o****相关：**以io开头，汇总了等待I/O、I/O使用量情况。
+
+**4.** **内存使用情况：**以memory开头，从主机、线程、事件等角度展示内存的使用情况
+
+**5.** **连接与会话信息：**processlist和session相关视图，总结了会话相关信息。
+
+**6.** **表相关：**以schema_table开头的视图，展示了表的统计信息。
+
+**7.** **索引信息：**统计了索引的使用情况，包含冗余索引和未使用的索引情况。
+
+**8.** **语句相关：**以statement开头，包含执行全表扫描、使用临时表、排序等的语句信息。
+
+**9.** **用户相关：**以user开头的视图，统计了用户使用的文件I/O、执行语句统计信息。
+
+**10.** **等待事件相关信息：**以wait开头，展示等待事件的延迟情况。
+
+
+
+#### **9.2 Sys schema视图使用场景**
+
+**索引情况**
+
+```sql
+#1. 查询冗余索引 
+select * from sys.schema_redundant_indexes; 
+
+#2. 查询未使用过的索引 
+select * from sys.schema_unused_indexes; 
+
+#3. 查询索引的使用情况 
+select index_name,rows_selected,rows_inserted,rows_updated,rows_deleted from sys.schema_index_statistics where table_schema='dbname' ;
+```
+
+**表相关**
+
+```sql
+# 1. 查询表的访问量 
+select table_schema,table_name,sum(io_read_requests+io_write_requests) as io from sys.schema_table_statistics group by table_schema,table_name order by io desc; 
+
+# 2. 查询占用bufferpool较多的表 
+select object_schema,object_name,allocated,data from sys.innodb_buffer_stats_by_table order by allocated limit 10; 
+
+# 3. 查看表的全表扫描情况 
+select * from sys.statements_with_full_table_scans where db='dbname';
+```
+
+**语句相关**
+
+```sql
+#1. 监控SQL执行的频率 
+select db,exec_count,query from sys.statement_analysis order by exec_count desc;
+
+#2. 监控使用了排序的SQL
+select db,exec_count,first_seen,last_seen,query from sys.statements_with_sorting limit 1;
+
+#3. 监控使用了临时表或者磁盘临时表的SQL
+select db,exec_count,tmp_tables,tmp_disk_tables,query
+from sys.statement_analysis where tmp_tables>0 or tmp_disk_tables >0 order by (tmp_tables+tmp_disk_tables) desc;
+```
+
+**IO相关**
+
+```sql
+#1. 查看消耗磁盘IO的文件 
+select file,avg_read,avg_write,avg_read+avg_write as avg_io
+from sys.io_global_by_file_by_bytes order by avg_read limit 10;
+```
+
+**Innodb相关**
+
+```sql
+#1. 行锁阻塞情况 
+select * from sys.innodb_lock_waits;
+```
 
