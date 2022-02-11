@@ -197,5 +197,120 @@ redo log 是事务持久性的保证，undo log 是事务原子性的保证。�
 
 Mysql把这些为了回滚而记录的这些内容称之为`撤销日志或者叫回滚日志`（undo log）
 
-注意：由于查询操作（select）并不会修改任何用户记录，所以在查询操作执行时，并`不需要`记录对应的undo log日志。
+注意：由于**查询操作（select）**并不会修改任何用户记录，所以在查询操作执行时，并`不需要`记录对应的undo log日志。
+
+#### 2.2 undo日志的作用
+
+- 作用1：回滚数据
+
+用户对undo日志可能存在`误解`：undo用于将数据库物理的恢复到执行语句或事务之前的样子。
+
+但是事实并非如此。undo是`逻辑日志`，因此只是将数据库逻辑地恢复到原来的样子。所有的逻辑修改都被取消了，但是数据结构和页本身在回滚之后可能大不相同。
+
+这是因为在多用户并发系统中，可能会有十、数百、数千个并发事务。数据库的主要任务就是协调对数据记录的访问。比如：一个事务在修改当前页的某几条记录，同时还会有别的事务在对同一个页中另几条记录进行修改。因此，不能将一个页回滚到事务开始的样子，因为这样会影响其他事务正在进行的工作。
+
+- 作用2：MVCC
+
+undo的另外一个作用是MVCC，即在InnoDB存储引擎中MVCC的实现是通过undo来完成。当用户读取一行记录时，若该记录已经被其他事务占用，当前事务可以通过undo读取之前的行版本信息，以此来实现非锁定读。
+
+#### 2.3 undo的存储结构
+
+**1、回滚段与undo页**
+
+InnoDB对undo log的管理采用段的方式，也就是`回滚段(rollback segment)`。每个回滚段记录了`1024`个`undo log segment`，而在每个undo log segment段中进行`undo页`的申请。
+
+- 在 InnoDB1.1版本之前 （不包括1.1版本），只有一个rollback segment，因此支持同时在线的事务限制为 1024 。虽然对绝大多数的应用来说都已经够用。
+- 从1.1版本开始InnoDB支持最大 128个rollback segment ，故其支持同时在线的事务限制提高到了 128*1024 。
+
+```sql
+show variables like 'innodb_undo_logs';
+```
+
+**2、回滚段与事务**
+
+1. 每个事务只会使用一个回滚段，一个回滚段在同一时刻可能服务于多个事务。
+2. 当一个事务开始的时候，会制定一个回滚段，在事务进行的过程中，当数据被修改时，原始的数据会被复制到回滚段中。
+3. 在回滚段中，事务会不断填充盘区，直到事务结束或者所有的空间被用完。如果当前的盘区不够用，事务会在段中请求扩展下一个盘区，如果所有分配的盘区都被用完，事务会覆盖最初的盘区或者在回滚段允许的情况下扩展新的盘区来使用。
+4. 回滚段存在于undo表空间中，在数据库中可以存在多个undo表空间，但同一时刻只能使用一个undo表空间。
+5. 当事务提交时，InnoDB存储引擎会做以下两件事：
+   - 将undo log放入列表中，以供之后的purge操作
+   - 判断undo 所在的页是否可以重用，若可以分配给下一个事务使用
+
+**3、回滚段中的数据分类**
+
+- ==未提交的回滚数据(uncommitted undo information)==
+- ==已经提交但未过期的回滚数据(committed undo information)==
+- ==事务已经提交并过期的数据(expired undo information)==
+
+#### 2.4 undo的类型
+
+在InnoDB中存储引擎中，undo log分为：
+
+- insert undo log
+- update undo log
+
+#### 2.5 undo log的生命周期
+
+**1.** **简要生成过程**
+
+**只有Buffer Pool的流程：**
+
+![image-20220211143013821](https://gitee.com/huangwei0123/image/raw/master/img/image-20220211143013821.png)
+
+==有了redo log 和undo log后==
+
+![image-20220211143308423](https://gitee.com/huangwei0123/image/raw/master/img/image-20220211143308423.png)
+
+**2.** **详细生成过程**
+
+![image-20220211143457991](https://gitee.com/huangwei0123/image/raw/master/img/image-20220211143457991.png)
+
+当我们执行insert的时候：
+
+```sql
+begin;
+INSERT INTO user (name) VALUES ("tom");
+```
+
+![image-20220211144332368](https://gitee.com/huangwei0123/image/raw/master/img/image-20220211144332368.png)
+
+当我们执行update时：
+
+![image-20220211144413767](https://gitee.com/huangwei0123/image/raw/master/img/image-20220211144413767.png)
+
+```sql
+UPDATE user SET id=2 WHERE id=1;
+```
+
+![image-20220211144436006](https://gitee.com/huangwei0123/image/raw/master/img/image-20220211144436006.png)
+
+**3.undo log是如何回滚得**
+
+以上面的例子来说，假设执行rollback，那么对应的流程应该是这样：
+
+1、通过undo no=3的日志把id=2的数据删除
+
+2、通过undo no=2的日志把id=1的数据的deletemark还原成0
+
+3、通过undo no=1的日志把id=1的数据的name还原成Tom
+
+4、通过undo no=0的日志把id=1的数据删除
+
+**4.undo log的删除**
+
+- 针对于insert undo log
+
+因为insert操作的记录，只对事务本身可见，对其他事务不可见。故该undo log可以在事务提交后直接删除，不需要进行purge操作。
+
+- 针对于update undo log
+
+该undo log可能需要提供mvcc机制，因此不能在提交事务时就进行删除。提交时放入undo log链表，等待purge线程进行最后的删除。
+
+#### 2.6 小结
+
+![image-20220210094627994](https://gitee.com/huangwei0123/image/raw/master/img/image-20220210094627994.png)
+
+==undo log 是逻辑日志，对事务回滚时，只是将数据库逻辑恢复到原来的样子==
+
+==redo log 是物理日志，记录的是数据页的物理变化，undo log 不是 redo log的逆过程。==
 
