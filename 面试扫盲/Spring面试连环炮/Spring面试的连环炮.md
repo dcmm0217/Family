@@ -6,7 +6,7 @@
 
 用一句话形容就是==你不要打给我了，我会主动打给你==
 
-**DI：依赖注入**，将对应的属性注入到具体的对象中，经常使用的注解有@autowired，@resource，populateBean方法来完成属性注入。
+**DI：依赖注入**，将对应的属性注入到具体的对象中，注入类型有两种，一种是byType，一种是byName，在我们经常使用的注解有@Autowired是通过byType来实现注入的，需要注入相同类型的的对象的话，还要使用@Qualifier来区分，当@Resource不设置任何值时，isDefaultName会为true，**当对应字段名称的bean或者BeanDefinition已存在时会走byName的形式，否则走byType的形式**；populateBean（是对对象属性的一个填充）方法来完成属性注入。
 
 **容器：存储对象**，使用Map结构存储对象， 在Sping中储存对象的时候一般有三级缓存，`singletonObjects`存放完整的对象；`earlySingletonObjects`存放半成品对象，`singletonFactory`用来存放lambda表达式和对象名称的映射，整个bean的生命周期，从创建到使用到销毁，各个环节都是由容器来帮我们控制的。
 
