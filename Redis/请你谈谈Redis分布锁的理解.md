@@ -189,6 +189,90 @@ C：Clock Drift（时钟漂移）
 
 #### 1、自己封装的Redis锁
 
+Lock接口
+
+```java
+public interface Lock {
+    /**
+     * 锁，保证并发的时同一个业务同时只能有一个会通过该栅栏。防重防并发
+     *
+     * @param key 需要拦截的KEY，随意指定
+     * @param value    拦截的业务的值，随意指定
+     * @param timeOut   当前KEY的超时时间 （这个时间很重要，太短可能会因为长事务没有被提交，导致栅栏失效，所以需要平衡自己的具体业务的自行时间，合理的设置超时时间 )
+     * @return Boolean
+     */
+    public boolean lock(String key, String value, Integer timeOut);
+
+    /**
+     * 解锁
+     * @param key 锁的名称
+     */
+    public void unlock(String key);
+
+    /**
+     * 解锁 - 防止长事务情况下，解错锁
+     * @param key 锁的名称
+     * @param value 保存的值
+     */
+    public void unlock(String key,String value);
+}
+```
+
+RedisLock
+
+```java
+public class RedisLock implements Lock {
+
+    private Logger logger = LoggerFactory.getLogger(RedisLock.class);
+
+    @Resource
+    private RedisTemplate<String, Object> redisTemplate;
+
+    /**
+     * 分布式锁
+     *
+     * @param key      需要拦截的KEY，按规则指定
+     * @param value    拦截的业务的值，指定为1 或其他值
+     * @param timeOut   当前KEY的超时时间 （这个时间很重要，太短可能会因为长事务没有被提交，导致栅栏失效，所以需要平衡自己的具体业务的自行时间，合理的设置超时时间 )
+     * @return Boolean
+     */
+    @Override
+    public boolean lock(String key, String value, Integer timeOut) {
+        if (timeOut == null || timeOut == 0 || StringUtils.isBlank(key) || StringUtils.isBlank(value)) {
+            throw new BusinessException("获取锁参数非法");
+        }
+        final String luaScript = " "
+                + " local result = tonumber(redis.call('SETNX', KEYS[1],ARGV[1]));"
+                + " if result==0 then "
+                + " return result;"
+                + " end "
+                + " redis.call('EXPIRE',KEYS[1],ARGV[2]);" + " return result";
+        final List<String> keys = putList("lock:" + key);
+        DefaultRedisScript<Long> getRedisScript = new DefaultRedisScript<>();
+        getRedisScript.setResultType(Long.class);
+        getRedisScript.setScriptText(luaScript);
+        Long result =  redisTemplate.execute(getRedisScript, keys, value, timeOut);
+        if (result == null || result == 0) {
+            logger.info("redis result is {}", false);
+            return false;
+        }
+        logger.info("redis result is {}", true);
+        return true;
+    }
+
+    @Override
+    public void unlock(String key) {
+        redisTemplate.delete("lock:"+key);
+    }
+
+    @Override
+    public void unlock(String key, String value) {
+        //TODO 从redis中获取值，然后对比 再决定是否删除
+        redisTemplate.delete("lock:"+key);
+    }
+}
+```
+
 #### 2、使用Redisson
 
 ```java
