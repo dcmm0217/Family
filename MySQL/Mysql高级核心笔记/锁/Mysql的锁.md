@@ -496,3 +496,536 @@ update items set quantity = quantity - num where id = 1001 and quantity - num > 
 
 ![image-20220227225001072](https://gitee.com/huangwei0123/image/raw/master/img/image-20220227225001072.png)
 
+#### 3.4 按加锁的方式划分：显示锁、隐式锁
+
+1、隐式锁
+
+一个事务在执行`insert`操作时，如果即将插入的`间隙`已经被其他事务加了`gap锁`，那么本次`insert`操作会阻塞，并且当前事务会在该间隙上加一个`插入意向锁`，否则一般情况下insert操作是不加锁的。那如果一个事务首先插入了一条记录（此时并没有在内存生产与该记录相关联的锁结构），然后另一个事务：
+
+- 立即使用`select ... Lock IN share mode `语句读取这条记录，也就是要获取到这条记录的S锁，或者使用`select ... for update`语句来读取这条记录，也就要获取这条记录的X锁，怎么办？
+
+  如果允许这种情况发送，那么可能产生`脏读`问题。
+
+- 立即修改这条记录，也就是要获取这条记录的X锁，怎么办？
+
+  如果允许这种情况发生，那么可能产生`脏写`问题。
+
+这个时候我们前边提过的`事务id`又要起作用了，我们把聚簇索引和二级索引中的记录分开看以下：
+
+- 情景一：对于聚簇索引记录来说，有一个 `trx_id` 隐藏列，该隐藏列记录着最后改动该记录的 `事务id` 。那么如果在当前事务中新插入一条聚簇索引记录后，该记录的 `trx_id `隐藏列代表的的就是当前事务的 `事务id` ，如果其他事务此时想对该记录添加 `S锁` 或者 `X锁` 时，首先会看一下该记录的`trx_id `隐藏列代表的事务`是否是当前的活跃事务`，如果是的话，那么就帮助当前事务创建一个 `X锁` （也就是为当前事务创建一个锁结构， `is_waiting `属性是 `false` ），然后自己进入**等待状态**（也就是为自己也创建一个锁结构， `is_waiting` 属性是 `true` ）。
+
+- 情景二：对于二级索引记录来说，本身并没有 `trx_id` 隐藏列，但是在二级索引页面的 `PageHeader` 部分有一个 `PAGE_MAX_TRX_ID` 属性，该属性代表对该页面做改动的最大的` 事务id` ，如果 `PAGE_MAX_TRX_ID` 属性值**小于**当前`最小的活跃 事务id` ，那么说明对该页面做修改的事务都已经提交了，否则就需要在页面中定位到对应的二级索引记录，然后回表找到它对应的聚簇索引记录，然后再重复 `情景一` 的做法
+
+即：一个事务对新插入的记录可以不显式的加锁（生成一个锁结构），但是由于`事务id`的存在，相当于加了一个`隐式锁`。别的事务在对这条记录加`S锁`或者`X锁`时，由于`隐式锁`的存在，会先帮助当前事务生成一个`锁结构`，然后自己再生成一个锁结构后进入`等待状态`。**隐式锁是一种延迟加载的机制**，从而来减少加锁的数量。
+
+隐式锁再实际内存对象中并不含有这个锁信息。只有当产生锁等待的时候，隐式锁转化成显式锁。
+
+InnoDB的insert操作，对插入的记录不加锁，但是此时如果有另外一个线程去进行当前读，session2会等待session1，这是如何实现的呢？
+
+```sql
+#session1
+begin;
+insert into student(id,name,class) values(12,"tom","一班");
+
+commit #后  即可查询
+
+#session2
+select * from student lock in share mode; 
+#阻塞 因为session1里面事务没提交新增的数据会带有一把隐式锁
+
+mysql> SELECT * FROM performance_schema.data_lock_waits\G;
+*************************** 1. row ***************************
+ENGINE: INNODB
+REQUESTING_ENGINE_LOCK_ID: 140562531358232:7:4:9:140562535668584
+REQUESTING_ENGINE_TRANSACTION_ID: 422037508068888
+REQUESTING_THREAD_ID: 64
+REQUESTING_EVENT_ID: 6
+REQUESTING_OBJECT_INSTANCE_BEGIN: 140562535668584
+BLOCKING_ENGINE_LOCK_ID: 140562531351768:7:4:9:140562535619104
+BLOCKING_ENGINE_TRANSACTION_ID: 15902
+BLOCKING_THREAD_ID: 64
+BLOCKING_EVENT_ID: 6
+BLOCKING_OBJECT_INSTANCE_BEGIN: 140562535619104
+1 row in set (0.00 sec)
+```
+
+
+
+隐式锁的逻辑过程如下:
+
+1. InnoDB的每条记录中都有一个隐含的trx_id字段，这个字段存在于聚集索引的B+Tree中。
+2. 再操作一条记录前，首先根据记录总的trx_id检查该事务是否是活动的事务（未提交或者回滚）。如果是活动的事务，首先将`隐式锁`转换为`显式锁`（就是为该事务添加一个锁）
+3. 检查是否有锁冲突，如果有，创建锁，并设置为waiting状态。如果没有冲突不加锁，跳到5
+4. 等待加锁成功，被唤醒，或者超时
+5. 写数据，并将自己的trx_id写入trx_id字段
+
+2、显示锁
+
+通过特定的语句进行加锁，我们一般称之为显示加锁，例如：
+
+显示加共享锁：
+
+```sql
+select .... lock in share mode
+```
+
+显示加排它锁：
+
+```sql
+select .... for update
+```
+
+#### 3.5 其他锁之：全局锁
+
+全局锁就是对 `整个数据库实例` 加锁。当你需要让整个库处于 `只读状态 `的时候，可以使用这个命令，之后其他线程的以下语句会被阻塞：数据更新语句（数据的增删改）、数据定义语句（包括建表、修改表结构等）和更新类事务的提交语句。全局锁的典型使用 **场景** 是：做 `全库逻辑备份` 。
+
+全局锁的命令：
+
+```sql
+Flush tables with read lock
+```
+
+#### 3.6其他锁之：死锁
+
+##### 1、概念
+
+两个事务都持有对方需要的锁，并且在等待对方释放，并且双方都不会释放自己的锁。
+
+举例1:
+
+![image-20220228114703761](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228114703761.png)
+
+举例2：
+
+用户A给B转账100，在此同时，用户B也给A转账100。这个过程，可能导致死锁。
+
+```sql
+# 事务1
+update account set balance = balance -100 where name ='A' #1
+update account set balance = balance +100 where name ='B' #3
+
+#事务2
+update account set balance = balance -100 where name ='B' #2
+update account set balance = balance +100 where name ='A' #4
+```
+
+##### 2、产生死锁的必要条件
+
+1. 两个或者两个以上的事务
+2. 每个事务都已经持有锁并且申请新的锁
+3. 锁资源同时只能被同一个事务持有或者不兼容
+4. 事务之间因为持有锁和申请锁彼此循环等待
+
+> 死锁的关键在于：两个或者两个以上的Session加锁的顺序不一致
+
+##### 3、如何处理死锁
+
+**方式1**：等待，直到超时（innodb_lock_wait_timeout=60s）
+
+即当两个事务互相等待时，当一个事务等待时间超过设置的阈值时，就将其`回滚`,d另外事务继续进行。这种说法简单有效，在innoDB中，参数`innodb_lock_wait_timeout`用来设置超时时间。
+
+缺点：对于在线服务来说，这个等待时间往往时无法接受的。
+
+那将此值修改短一些，比如1s，0.1s是否合适？  
+
+==不合适，容易误伤普通的锁等待。==
+
+比如：事务A 修改了id=1的数据，事务2也去修改id=1的数据，那就造成排它锁等待，事务2等事务1提交后才能修改数据。
+
+**方式2**：使用死锁检测进行死锁处理
+
+方式1检测死锁太过被动，innodb还提供了`wait-for graph算法`来主动进行死锁检测，每当加锁请求无法立即满足需要等待并进入等待时，wait-for graph算法都会被触发。
+
+这是一种较为`主动的死锁检测机制`，要求数据库保存`锁的信息链表`和`事务等待链表`两部分信息
+
+![image-20220228120507981](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228120507981.png)
+
+基于这两个信息，可以绘制`wait-for graph`（等待图）
+
+![image-20220228120537283](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228120537283.png)
+
+> 死锁检测的原理是构建一个以事务为顶点，锁为边的有向图，判断有向图是否存在环，存在即有死锁。
+
+一旦检测到回路、有死锁，这时候InnoDB存储引擎会选择`回滚undo量最小的事务`，让其他事务继续执行(`innodb_deadlock_detect=on` 表示开启这个逻辑)
+
+缺点：每个新的被阻塞的线程，都要判断是不是由于自己的加入导致了死锁，这个操作时间复杂度是O(n)。如果100个并发线程同时更新同一行，意味着要检测100*100 = 1w次，1w个线程会检测1kw次。
+
+**如何解决？**
+
+- 方式1：关闭死锁检测，但是意味着可能会出现大量超时，会导致业务有损
+- 方式2：控制并发访问的数量。比如在中间件中实现对于相同行的更新，在进入引擎之前排队，这样在Innodb内部就不会有大量的死锁检测工作。
+
+进一步思路：
+
+可以考虑通过将一行改成逻辑上的多行来减少`锁冲突`。比如：连锁超市账户总额记录，可以考虑放到多条记录上。账户总额等于多个记录的值总和。
+
+##### 4、如何避免死锁
+
+- 合理设计索引，使业务SQL尽可能的通过索引定位更少的行，减少锁竞争。
+- 调整业务逻辑的SQL执行顺序，避免update/delete长时间持有锁的SQL在事务前面。
+- 避免大事务，尽量将大事务拆成多个小事务来处理，小事务缩短锁定资源的时间，发生锁冲突的几率也更小
+- 在并发比较高的系统中，不要显示加锁，特别是在事务里显式加锁。如：select ... for update语句，如果在事务里允许了start transaction 或者设置了autocommit = 0，那么就会锁定锁查找到的记录。
+- 降低隔离级别，如果业务允许，将隔离级别调低也是比较好的选择，比如将隔离级别从RR调整到RC，可以避免掉很多因为gap锁（间隙锁）造成的死锁。
+
+## 4、锁的内部结构
+
+我们前边说对一条记录加锁的本质就是在内存中创建一个`锁结构`与之关联，那么是不是一个事务对多条记录加锁，就要创建多个`锁结构`呢？比如：
+
+```sql
+#事务1
+select * from user lock in share mode;
+```
+
+理论上创建多个`锁结构`没问题，但是如果一个事务要获取10000条记录的锁、生成10000个锁结构也太崩溃了！所以决定在对不同记录加锁时，如果符合下边这些条件的记录会放到一个`锁结构`中。
+
+- 在同一事务中进行加锁的操作
+- 被加锁的记录在同一个页面中
+- 加锁的类型是一样的
+- 等待状态时一样的
+
+Innodb存储引擎中的`锁结构`如下：
+
+![image-20220228152752577](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228152752577.png)
+
+结构解析：
+
+1.锁所在的事务信息 ：
+
+不论是 `表锁` 还是 `行锁` ，都是在事务执行过程中生成的，哪个事务生成了这个 `锁结构 `，这里就记录这个事务的信息
+
+此 `锁所在的事务信息` 在内存结构中只是一个`指针`，通过指针可以找到内存中关于该事务的更多信息，比方说`事务id`等
+
+2.索引信息：
+
+对于 `行锁` 来说，需要记录一下加锁的记录是`属于哪个索引`的。这里也是一个指针。
+
+3.表锁／行锁信息 ：
+
+`表锁结构` 和` 行锁结构 `在这个位置的内容是不同的：
+
+- 表锁：记载着时对哪个表加的锁，还有其他的一些信息
+- 行锁：记载了三个重要的信息：
+  - space ID：记录所在表空间 
+  - page Number：记录所在页号
+  - n_bits：对于行锁来说，一条记录就对应着一个比特位，一个页面中包含很多记录，用不同的比特位来区分到底是哪一条记录加了锁。为此在行锁结构的末尾放置了一堆比特位，这个`n_bits `属性代表使用了多少比特位
+
+> n_bits的值一般都比页面中记录条数多一些。主要是为了之后在页面中插入了新记录后
+> 也不至于重新分配锁结构
+
+4.type_mode：
+
+这是一个32位的数，被分成了`lock_mode`、`lock_type`、`rec_lock_type`三部分，如图所示
+
+![image-20220228153518475](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228153518475.png)
+
+- 锁的模式（ lock_mode ），占用低4位，可选的值如下：
+
+  - LOCK_IS （十进制的 0 ）：表示共享意向锁，也就是 IS锁 。
+  - LOCK_IX （十进制的 1 ）：表示独占意向锁，也就是 IX锁 。
+  - LOCK_S （十进制的 2 ）：表示共享锁，也就是 S锁 
+  - LOCK_X （十进制的 3 ）：表示独占锁，也就是 X锁 。
+  - LOCK_AUTO_INC （十进制的 4 ）：表示 AUTO-INC锁 。
+
+  在InnoDB存储引擎中，LOCK_IS，LOCK_IX，LOCK_AUTO_INC都算是表级锁的模式，LOCK_S和LOCK_X既可以算是表级锁的模式，也可以是行级锁的模式。
+
+- 锁的类型（ lock_type ），占用第5～8位，不过现阶段只有第5位和第6位被使用：
+  - LOCK_TABLE （十进制的 16 ），也就是当第5个比特位置为1时，表示表级锁
+  - LOCK_REC （十进制的 32 ）也就是当第6个比特位置为1时，表示行
+- 行锁的具体类型（ rec_lock_type ），使用其余的位来表示。只有在 lock_type 的值为
+  LOCK_REC 时，也就是只有在该锁为行级锁时，才会被细分为更多的类型：
+  - LOCK_ORDINARY （十进制的 0 ）：表示 next-key锁 。
+  - LOCK_GAP （十进制的 512 ）：也就是当第10个比特位置为1时，表示 gap锁 。
+  - LOCK_REC_NOT_GAP （十进制的 1024 ）：也就是当第11个比特位置为1时，表示正经 记录锁 
+  - LOCK_INSERT_INTENTION （十进制的 2048 ）：也就是当第12个比特位置为1时，表示插入意向锁。其他的类型：还有一些不常用的类型我们就不多说了。
+
+- is_waiting 属性呢？基于内存空间的节省，所以把 is_waiting 属性放到了 type_mode 这个32位的数字中：
+  - LOCK_WAIT （十进制的 256 ） ：当第9个比特位置为 1 时，表示 is_waiting 为 true ，也就是当前事务尚未获取到锁，处在等待状态；当这个比特位为 0 时，表示 is_waiting 为false ，也就是当前事务获取锁成功。
+
+5.其他信息：
+
+为了更好的管理系统运行过程中生成的各种锁结构而设计了各种哈希表和
+
+6.一堆比特位：
+
+如果是 `行锁结构` 的话，在该结构末尾还放置了一堆比特位，比特位的数量是由上边提到的 `n_bits` 属性表示的。InnoDB数据页中的每条记录在 `记录头信`息 中都包含一个 `heap_no `属性，伪记录 `Infimum` 的`heap_no` 值为 0 ， `Supremum` 的 `heap_no` 值为 1 ，**之后每插入一条记录， heap_no 值就增1**。 `锁结构` 最后的一堆比特位就对应着一个页面中的记录，**一个比特位映射一个 heap_no** ，即一个比特位映射到页内的一条记录。
+
+## 5、锁监控
+
+关于MySQL锁的监控，我们一般可以通过检查 `InnoDB_row_lock` 等状态变量来分析系统上的行锁的争夺情况
+
+```sql
+mysql> show status like 'innodb_row_lock%';
++-------------------------------+-------+
+| Variable_name | Value |
++-------------------------------+-------+
+| Innodb_row_lock_current_waits | 0 |
+| Innodb_row_lock_time | 0 |
+| Innodb_row_lock_time_avg | 0 |
+| Innodb_row_lock_time_max | 0 |
+| Innodb_row_lock_waits | 0 |
++-------------------------------+-------+
+5 rows in set (0.01 sec)
+```
+
+对各个状态量的说明如下：
+
+- Innodb_row_lock_current_waits：当前正在等待锁定的数量；
+- **Innodb_row_lock_time** ：从系统启动到现在锁定总时间长度；（等待总时长）
+- **Innodb_row_lock_time_avg** ：每次等待所花平均时间；（等待平均时长）
+- Innodb_row_lock_time_max：从系统启动到现在等待最常的一次所花的时间；
+- **Innodb_row_lock_waits** ：系统启动后到现在总共等待的次数；（等待总次数）
+
+对于这5个状态变量，比较重要的3个见上面粗体
+
+尤其时当等待次数很高，而且每次等待时长也不小的时候，我们就需要分析系统中为什么会有如此多的等待，然后根据分析结果着手指定优化计划。
+
+**其他监控方法：**
+
+MySQL把事务和锁的信息记录在了` information_schema` 库中，涉及到的三张表分别是
+`INNODB_TRX `、` INNODB_LOCKS` 和 `INNODB_LOCK_WAITS `。
+
+MySQL5.7及之前 ，可以通过`information_schema.INNODB_LOCKS`查看事务的锁情况，**但只能看到阻塞事务的锁；如果事务并未被阻塞，则在该表中看不到该事务的锁情况**。
+
+MySQL8.0删除了`information_schema.INNODB_LOCKS`，添加了 `performance_schema.data_locks` ，可以通过`**performance_schema.data_locks**`查看事务的锁情况，和MySQL5.7及之前不同，
+
+performance_schema.data_locks不但可以看到阻塞该事务的锁，还可以看到该事务所持有的锁。
+
+同时，`information_schema.INNODB_LOCK_WAITS`也被`performance_schema.data_lock_waits `所代替
+
+模拟一个锁等待的场景
+
+（1）查询正在被锁阻塞的sql语句。
+
+```sql
+SELECT * FROM information_schema.INNODB_TRX\G;
+```
+
+重要属性代表含义已在上述中标注。
+
+（2）查询锁等待情况
+
+```sql
+SELECT * FROM data_lock_waits\G;
+
+*************************** 1. row ***************************
+ENGINE: INNODB
+REQUESTING_ENGINE_LOCK_ID: 139750145405624:7:4:7:139747028690608
+REQUESTING_ENGINE_TRANSACTION_ID: 13845 #被阻塞的事务IDREQUESTING_THREAD_ID: 72
+REQUESTING_EVENT_ID: 26
+REQUESTING_OBJECT_INSTANCE_BEGIN: 139747028690608
+BLOCKING_ENGINE_LOCK_ID: 139750145406432:7:4:7:139747028813248
+BLOCKING_ENGINE_TRANSACTION_ID: 13844 #正在执行的事务ID，阻塞了13845
+BLOCKING_THREAD_ID: 71
+BLOCKING_EVENT_ID: 24
+BLOCKING_OBJECT_INSTANCE_BEGIN: 139747028813248
+1 row in set (0.00 sec)
+```
+
+（3）查询锁的情况
+
+```sql
+mysql > SELECT * from performance_schema.data_locks\G;
+```
+
+## 6、间隙锁加锁的11种案例
+
+间隙锁加锁规则（共11个案例）
+
+间隙锁是在可重复读隔离级别下才会生效的：next-key lock 实际上是由间隙锁加行锁实现的，如果切换到读提交隔离级别 (read-committed) 的话，就好理解了，过程中去掉间隙锁的部分也就是只剩下行锁的部分。
+
+而在读提交隔离级别下间隙锁就没有了，为了解决可能出现的数据和日志不一致问题，需要把binlog 格式设置为 row 。也就是说，许多公司的配置为：读提交隔离级别加 binlog_format=row。业务不需要可重复读的保证，这样考虑到读提交下操作数据的锁范围更小（没有间隙锁），这个选择是合理的。
+
+next-key lock的加锁规则
+
+==总结的加锁规则里面，包含了两个 “ “ 原则 ” ” 、两个 “ “ 优化 ” ” 和一个 “bug” 。==
+
+1. 原则 1 ：加锁的基本单位是 next-key lock 。 next-key lock 是**前开后闭区间**。
+
+2. 原则 2 ：查找过程中访问到的对象才会加锁。任何辅助索引上的锁，或者非索引列上的锁，最终都要回溯到主键上，在主键上也要加一把锁。
+
+3. 优化 1 ：索引上的等值查询，给唯一索引加锁的时候， next-key lock 退化为行锁。也就是说如果InnoDB扫描的是一个主键、或是一个唯一索引的话，那InnoDB只会采用行锁方式来加锁
+
+4. 优化 2 ：索引上（不一定是唯一索引）的等值查询，向右遍历时且最后一个值不满足等值条件的时候， next-key lock 退化为间隙锁。
+
+5. 一个 bug ：唯一索引上的范围查询会访问到不满足条件的第一个值为止。
+
+我们以表test作为例子，建表语句和初始化语句如下：其中id为主键索引
+
+```sql
+CREATE TABLE `test` (
+`id` int(11) NOT NULL,
+`col1` int(11) DEFAULT NULL,
+`col2` int(11) DEFAULT NULL,
+PRIMARY KEY (`id`),
+KEY `c` (`c`)
+) ENGINE=InnoDB;
+insert into test values(0,0,0),(5,5,5),
+(10,10,10),(15,15,15),(20,20,20),(25,25,25);
+```
+
+==案例一：唯一索引等值查询间隙锁==
+
+![image-20220228160437680](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228160437680.png)
+
+由于表 test 中没有 id=7 的记录
+
+根据原则 1 ，加锁单位是 next-key lock ， session A 加锁范围就是 (5,10] ； 同时根据优化 2 ，这是一个等值查询 (id=7) ，而 id=10 不满足查询条件， next-key lock 退化成间隙锁，因此最终加锁的范围是 (5,10)
+
+==案例二：非唯一索引等值查询锁==
+
+![image-20220228160558992](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228160558992.png)
+
+这里 session A 要给索引 col1 上 col1=5 的这一行加上读锁。
+
+1. 根据原则 1 ，加锁单位是 next-key lock ，左开右闭，5是闭上的，因此会给 (0,5] 加上 next-key lock。
+
+2. 要注意 c 是普通索引，因此仅访问 c=5 这一条记录是不能马上停下来的（可能有col1=5的其他记录），需要向右遍历，查到c=10 才放弃。根据原则 2 ，访问到的都要加锁，因此要给 (5,10] 加next-key lock 
+
+3. 但是同时这个符合优化 2 ：等值判断，向右遍历，最后一个值不满足 col1=5 这个等值条件，因此退化成间隙锁 (5,10) 。
+
+4. 根据原则 2 ， 只有访问到的对象才会加锁，这个查询使用覆盖索引，并不需要访问主键索引，所以主键索引上没有加任何锁，这就是为什么 session B 的 update 语句可以执行完成。
+
+但 session C 要插入一个 (7,7,7) 的记录，就会被 session A 的间隙锁 (5,10) 锁住 这个例子说明，锁是加在索引上的
+
+执行 for update 时，系统会认为你接下来要更新数据，因此会顺便给主键索引上满足条件的行加上行锁
+
+如果你要用 lock in share mode来给行加读锁避免数据被更新的话，就必须得绕过覆盖索引的优化，因为覆盖索引不会访问主键索引，不会给主键索引上加锁
+
+==案例三：主键索引范围查询锁==
+
+上面两个例子是等值查询的，这个例子是关于范围查询的，也就是说下面的语句
+
+```sql
+select * from test where id=10 for update
+select * from tets where id>=10 and id<11 for update;
+```
+
+这两条查语句肯定是等价的，但是它们的加锁规则不太一样
+
+![image-20220228161239224](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228161239224.png)
+
+1. 开始执行的时候，要找到第一个 id=10 的行，因此本该是 next-key lock(5,10] 。 根据优化 1 ，主键id 上的等值条件，退化成行锁，只加了 id=10 这一行的行锁。
+
+2. 它是范围查询， 范围查找就往后继续找，找到 id=15 这一行停下来，不满足条件，因此需要加next-key lock(10,15] 。
+
+session A 这时候锁的范围就是主键索引上，行锁 id=10 和 next-key lock(10,15] 。
+
+**首次 session A 定位查找id=10 的行的时候，是当做等值查询来判断的，而向右扫描到 id=15 的时候，用的是范围查询判断。**
+
+==案例四：非唯一索引范围查询锁==
+
+与案例三不同的是，案例四中查询语句的 where 部分用的是字段 c ，它是普通索引
+
+这两条查语句肯定是等价的，但是它们的加锁规则不太一样
+
+![image-20220228161433288](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228161433288.png)
+
+在第一次用 col1=10 定位记录的时候，索引 c 上加了 (5,10] 这个 next-key lock 后，由于索引 col1 是非唯一索引，没有优化规则，也就是 说不会蜕变为行锁，因此最终 sesion A 加的锁是，索引 c 上的 (5,10] 和(10,15] 这两个 next-keylock 
+
+这里需要扫描到 col1=15 才停止扫描，是合理的，因为 InnoDB 要扫到 col1=15 ，才知道不需要继续往后找了。
+
+==案例五：唯一索引范围查询锁 bug==
+
+![image-20220228161540619](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228161540619.png)
+
+session A 是一个范围查询，按照原则 1 的话，应该是索引 id 上只加 (10,15] 这个 next-key lock ，并且因为 id 是唯一键，所以循环判断到 id=15 这一行就应该停止了。
+
+但是实现上， InnoDB 会往前扫描到第一个不满足条件的行为止，也就是 id=20 。
+
+而且由于这是个范围扫描，因此索引 id 上的 (15,20] 这个 next-key lock 也会被锁上。照理说，这里锁住 id=20 这一行的行为，其实是没有必要的。因为扫描到 id=15 ，就可以确定不用往后再找了
+
+==案例六：非唯一索引上存在 " " 等值 " " 的例子==
+
+这里，我给表 t 插入一条新记录：insert into t values(30,10,30);也就是说，现在表里面有两个c=10的行
+
+但是它们的主键值 id 是不同的（分别是 10 和 30 ），因此这两个c=10 的记录之间，也是有间隙的
+
+![image-20220228162243155](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228162243155.png)
+
+这次我们用 delete 语句来验证。注意， delete 语句加锁的逻辑，其实跟 select ... for update 是类似的，也就是我在文章开始总结的两个 “ 原则 ” 、两个 “ 优化 ” 和一个 “bug” 。
+
+这时， session A 在遍历的时候，先访问第一个 col1=10 的记录。同样地，根据原则 1 ，这里加的是(col1=5,id=5) 到 (col1=10,id=10) 这个 next-key lock 。
+
+由于c是普通索引，所以继续向右查找，直到碰到 (col1=15,id=15) 这一行循环才结束。根据优化 2 ，这是一个等值查询，向右查找到了不满足条件的行，所以会退化成 (col1=10,id=10) 到 (col1=15,id=15) 的间隙锁
+
+![image-20220228162552246](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228162552246.png)
+
+这个 delete 语句在索引 c 上的加锁范围，就是上面图中蓝色区域覆盖的部分。这个蓝色区域左右两边都是虚线，表示开区间，即 (col1=5,id=5) 和 (col1=15,id=15) 这两行上都没有锁
+
+==案例七： limit 语句加锁==
+
+例子 6 也有一个对照案例，场景如下所示：
+
+![image-20220228163353931](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228163353931.png)
+
+session A 的 delete 语句加了 limit 2 。你知道表 t 里 c=10 的记录其实只有两条，因此加不加 limit 2 ，删除的效果都是一样的。但是加锁效果却不一样
+
+这是因为，案例七里的 delete 语句明确加了 limit 2 的限制，因此在遍历到 (col1=10, id=30) 这一行之后，满足条件的语句已经有两条，循环就结束了。因此，索引 col1 上的加锁范围就变成了从（ col1=5,id=5)到（ col1=10,id=30) 这个前开后闭区间，如下图所示：
+
+![image-20220228163420281](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228163420281.png)
+
+这个例子对我们实践的指导意义就是， 在删除数据的时候尽量加 limit 。
+
+==这样不仅可以控制删除数据的条数，让操作更安全，还可以减小加锁的范围。==
+
+==案例八：一个死锁的==
+
+![image-20220228163445294](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228163445294.png)
+
+1. session A 启动事务后执行查询语句加 lock in share mode ，在索引 col1 上加了 next-keylock(5,10] 和间隙锁 (10,15) （索引向右遍历退化为间隙锁）；
+2. session B 的 update 语句也要在索引 c 上加 next-key lock(5,10] ，进入锁等待； 实际上分成了两步，先是加 (5,10) 的间隙锁，加锁成功；然后加 col1=10 的行锁，因为sessionA上已经给这行加上了读锁，此时申请死锁时会被阻塞
+3. 然后 session A 要再插入 (8,8,8) 这一行，被 session B 的间隙锁锁住。由于出现了死锁， InnoDB 让session B 回滚
+
+==案例九：order by索引排序的间隙锁1==
+
+如下面一条语句
+
+```sql
+begin;
+select * from test where id>9 and id<12 order by id desc for update;
+```
+
+下图为这个表的索引id的示意图。
+
+![image-20220228165740369](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228165740369.png)
+
+1. 首先这个查询语句的语义是 order by id desc ，要拿到满足条件的所有行，优化器必须先找到 “ 第一个 id<12 的值 ” 。
+2. 这个过程是通过索引树的搜索过程得到的，在引擎内部，其实是要找到 id=12 的这个值，只是最终没找到，但找到了 (10,15) 这个间隙。（ id=15 不满足条件，所以 next-key lock 退化为了间隙锁 (10,15)。）
+
+3. 然后向左遍历，在遍历过程中，就不是等值查询了，会扫描到 id=5 这一行，又因为区间是左开右闭的，所以会加一个next-key lock (0,5] 。 也就是说，在执行过程中，通过树搜索的方式定位记录的时候，用的是 “ 等值查询 ” 的方法。
+
+==案例十：order by索引排序的间隙锁2==
+
+![image-20220228165844004](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228165844004.png)
+
+1. 由于是 order by col1 desc ，第一个要定位的是索引 col1 上 “ 最右边的 ”col1=20 的行。这是一个非唯一索引的等值查询：
+
+左开右闭区间，首先加上 next-key lock (15,20] 。 向右遍历，col1=25不满足条件，退化为间隙锁 所以会加上间隙锁(20,25) 和 next-key lock (15,20] 。
+
+2. 在索引 col1 上向左遍历，要扫描到 col1=10 才停下来。同时又因为左开右闭区间，所以 next-keylock 会加到 (5,10] ，这正是阻塞session B 的 insert 语句的原因。
+
+3. 在扫描过程中， col1=20 、 col1=15 、 col1=10 这三行都存在值，由于是 select * ，所以会在主键id 上加三个行锁。 因此， session A 的 select 语句锁的范围就是：
+  1. 索引 col1 上 (5, 25) ；
+  2. 主键索引上 id=15 、 20 两个行锁。
+
+==案例十一：update修改数据的例子-先插入后删除==
+
+![image-20220228165925194](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228165925194.png)
+
+注意：根据 col1>5 查到的第一个记录是 col1=10 ，因此不会加 (0,5] 这个 next-key lock 。
+
+session A 的加锁范围是索引 col1 上的 (5,10] 、 (10,15] 、 (15,20] 、 (20,25] 和(25,supremum]
+
+之后 session B 的第一个 update 语句，要把 col1=5 改成 col1=1 ，你可以理解为两步：
+
+1. 插入 (col1=1, id=5) 这个记录；
+2.  删除 (col1=5, id=5) 这个记
+
+通过这个操作， session A 的加锁范围变成了图 7 所示的样子：
+
+![image-20220228165957283](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228165957283.png)
+
+好，接下来 session B 要执行 update t set col1 = 5 where col1 = 1 这个语句了，一样地可以拆成两步：
+
+1. 插入 (col1=5, id=5) 这个记录；
+2. 删除 (col1=1, id=5) 这个记录。 第一步试图在已经加了间隙锁的 (1,10) 中插入数据，所以就被堵住了。
