@@ -35,9 +35,7 @@
 
 **结果：**如果key不存在，则会将key设置为value，并返回1；如果key存在，不会有任务影响，返回0
 
-基于这个特性，我们就可以用setnx实现加锁的目的：通过setnx加锁，加锁之后其他服务无法加锁，用完之后，再通过delete解锁，深藏功与名。
-
-![image-20220224175156082](https://gitee.com/huangwei0123/image/raw/master/img/image-20220224175156082.png)
+​	![image-20220224175156082](https://gitee.com/huangwei0123/image/raw/master/img/image-20220224175156082.png)
 
 #### ==支持过期时间的版本==
 
