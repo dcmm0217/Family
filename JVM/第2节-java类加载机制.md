@@ -214,3 +214,165 @@ class文件的显式加载与隐式加载的方式是指JVM加载class文件到�
 - 它是用户自定义类加载器的默认父加载器
 - 通过ClassLoader的getSystemClassLoader()方法可以获取到该类加载器
 
+#### 2.2 双亲委派机制
+
+- 当AppClassLoader加载一个class时，它首先不会自己去尝试加载这个类，而是把类加载请求委派给父类加载器ExtClassLoader去完成。
+
+- 当ExtClassLoader加载一个class时，它首先也不会自己去尝试加载这个类，而是把类加载请求委派给BootStrapClassLoader去完成。
+
+- 如果BootStrapClassLoader加载失败(例如在$JAVA_HOME/jre/lib里未查找到该class)，会使用ExtClassLoader来尝试加载；
+
+- 若ExtClassLoader也加载失败，则会使用AppClassLoader来加载，如果AppClassLoader也加载失败，则会报出异常ClassNotFoundException。
+
+**双亲委派的优势：**
+
+- 避免类的重复加载，确保一个类的全局唯一性
+
+==Java类随着它的类加载器一起具备了一种带有优先级的层级关系，通过这种层级关系可以避免类的重复加载，==当父亲已经加载了该类时，就没必要子ClassLoader再去加载一次。
+
+- 保护程序安全，防止核心API被随意窜改。
+- 系统类防止内存中出现多份同样的字节码
+- 保证Java程序安全稳定运行
+
+**双亲委派的弊端：**
+
+- 检查类是否加载的过程是单向的，顶层的ClassLoader无法访问底层的ClassLoader所加载的类
+- 通常情况下，启动类加载器中的类为系统核心类，包括一些重要的接口，而在应用类加载器中，为应用类。==按照这种模式，应用类访问系统类自然是没有问题，但是系统类访问应用类就会出现问题。==
+
+比如：在系统类中提供了一个接口，该接口需要在应用类中得以实现，该接口还绑定一个工厂方法，用于创建该接口的实例，而接口和工厂都在启动类加载器中。这时，就会出现该工厂方法无法创建由应用类加载器加载的应用实例的问题。
+
+**结论：**
+
+由于Java虚拟机规范并没有明确要求类加载器机制一定要使用双亲委派模型，只是建议使用这种方式而已。
+
+**双亲委派代码实现**
+
+```java
+public Class<?> loadClass(String name)throws ClassNotFoundException {
+            return loadClass(name, false);
+    }
+    protected synchronized Class<?> loadClass(String name, boolean resolve)throws ClassNotFoundException {
+            // 首先判断该类型是否已经被加载
+            Class c = findLoadedClass(name);
+            if (c == null) {
+                //如果没有被加载，就委托给父类加载或者委派给启动类加载器加载
+                try {
+                    if (parent != null) {
+                         //如果存在父类加载器，就委派给父类加载器加载
+                        c = parent.loadClass(name, false);
+                    } else {
+                    //如果不存在父类加载器，就检查是否是由启动类加载器加载的类，通过调用本地方法native Class findBootstrapClass(String name)
+                        c = findBootstrapClass0(name);
+                    }
+                } catch (ClassNotFoundException e) {
+                 // 如果父类加载器和启动类加载器都不能完成加载任务，才调用自身的加载功能
+                    c = findClass(name);
+                }
+            }
+            if (resolve) {
+                resolveClass(c);
+            }
+            return c;
+        }
+
+```
+
+**破坏双亲委派机制及其举例：**
+
+
+
+#### 2.3 自定义类加载器
+
+为什么需要自定义类加载器？
+
+- 隔离加载类
+
+  在某些框架内进行中间件与应用模块隔离，把类加载到不同的环境中。比如阿里某容器框架通过自定义加载器加载确保应用中依赖的jar包不会影响到中间件运行时使用的jar包。	
+
+- 修改类加载的方式
+
+类加载模型并非强制，除了bootstrap以外，其他加载并非一定要引入，可以根据实际情况进行动态加载
+
+- 扩展加载源
+
+比如从数据库、网络、甚至是电视机机顶盒加载
+
+- 防止源码泄露
+
+Java代码容易被编译和篡改，可以进行编译加密。那么也需要自定义，还原加密字节码。
+
+```java
+package com.pdai.jvm.classloader;
+import java.io.*;
+
+public class MyClassLoader extends ClassLoader {
+
+    private String root;
+
+    protected Class<?> findClass(String name) throws ClassNotFoundException {
+        byte[] classData = loadClassData(name);
+        if (classData == null) {
+            throw new ClassNotFoundException();
+        } else {
+            return defineClass(name, classData, 0, classData.length);
+        }
+    }
+
+    private byte[] loadClassData(String className) {
+        String fileName = root + File.separatorChar
+                + className.replace('.', File.separatorChar) + ".class";
+        try {
+            InputStream ins = new FileInputStream(fileName);
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            int bufferSize = 1024;
+            byte[] buffer = new byte[bufferSize];
+            int length = 0;
+            while ((length = ins.read(buffer)) != -1) {
+                baos.write(buffer, 0, length);
+            }
+            return baos.toByteArray();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public String getRoot() {
+        return root;
+    }
+
+    public void setRoot(String root) {
+        this.root = root;
+    }
+
+    public static void main(String[] args)  {
+
+        MyClassLoader classLoader = new MyClassLoader();
+        classLoader.setRoot("D:\\temp");
+
+        Class<?> testClass = null;
+        try {
+            testClass = classLoader.loadClass("com.pdai.jvm.classloader.Test2");
+            Object object = testClass.newInstance();
+            System.out.println(object.getClass().getClassLoader());
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        } catch (InstantiationException e) {
+            e.printStackTrace();
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+```
+
+自定义类加载器的核心在于对字节码文件的获取，如果是加密的字节码则需要在该类中对文件进行解密。由于这里只是演示，我并未对class文件进行加密，因此没有解密的过程。
+
+**这里有几点需要注意** :
+
+1、这里传递的文件名需要是类的全限定性名称，即`com.pdai.jvm.classloader.Test2`格式的，因为 defineClass 方法是按这种格式进行处理的
+
+2、最好不要重写loadClass方法，因为这样容易破坏双亲委托模式。
+
+3、这类Test 类本身可以被 AppClassLoader 类加载，因此我们不能把com/pdai/jvm/classloader/Test2.class 放在类路径下。否则，由于双亲委托机制的存在，会直接导致该类由 AppClassLoader 加载，而不会通过我们自定义类加载器来加载。
