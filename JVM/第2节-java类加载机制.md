@@ -279,7 +279,27 @@ public Class<?> loadClass(String name)throws ClassNotFoundException {
 
 **破坏双亲委派机制及其举例：**
 
+1、使用线程上下文类加载器进行破坏
 
+![image-20220312150506286](https://gitee.com/huangwei0123/image/raw/master/img/image-20220312150506286.png)
+
+使用线程上下文类加载器去解决上层类加载器不能去访问下层加载器内容的问题。
+
+默认上下文加载器就是应用类加载器，这样以上下文加载器作为中介，使得启动类加载器中的代码也可以访问应用类加载器中的类。
+
+2、使用代码热替换、模块热部署等方式进行替换
+
+当需要加载一个Bundle时，就要把Bundle连同类加载器一起换掉以实现代码热替换。
+
+**什么是tomcat的类加载机制？**
+
+tomcat8可以通过配置<Loader delegete='true'/>表示遵循双亲委派机制
+
+tocmat的类加载机制是违反了双亲委派原则的。对于一些未加载的非基础类，各个web应用自己的类加载器（WebAppClassLoader）会优先查看自己的仓库加载，加载不到时再交给CommonClassLoader走双亲委托。
+
+**tomcat是任何实现自己独特的类加载机制的呢？**
+
+![image-20220312152344428](https://gitee.com/huangwei0123/image/raw/master/img/image-20220312152344428.png)
 
 #### 2.3 自定义类加载器
 
