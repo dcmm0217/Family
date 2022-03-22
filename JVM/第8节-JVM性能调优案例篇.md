@@ -1248,12 +1248,240 @@ xxx大厂问题排查过程：
 
 （2）或者采用定时锁，一段时间后，如果还不能获取到锁就释放自身持有的所有锁。
 
-
-
 ### 3.5 性能优化案例5：G1并发执行的线程数对性能的影响
+
+在8核心Linux配置下，使用如下JVM参数
+
+```
+export CATALINA_OPTS="$CATALINA_OPTS -XX:+UseG1GC"
+export CATALINA_OPTS="$CATALINA_OPTS -Xms30m"
+export CATALINA_OPTS="$CATALINA_OPTS -Xmx30m"
+export CATALINA_OPTS="$CATALINA_OPTS -XX:+PrintGCDetails"
+export CATALINA_OPTS="$CATALINA_OPTS -XX:MetaspaceSize=64m"
+export CATALINA_OPTS="$CATALINA_OPTS -XX:+PrintGCDateStamps"
+export CATALINA_OPTS="$CATALINA_OPTS -Xloggc:/opt/tomcat8.5/logs/gc.log"
+export CATALINA_OPTS="$CATALINA_OPTS -XX:ConcGCThreads=1"
+```
+
+说明：最后一个参数可以在使用G1GC测试初始并发GCThreads之后再加上。
+
+初始化内存和最大内存调整小一些，目的发生 FullGC，关注GC时间
+
+==关注点是：GC次数，GC时间，以及 Jmeter的平均响应时间==
+
+> 初始化状态：
+
+启动tomcat
+
+查看进程默认的并发线程数：
+
+```
+jinfo -flag ConcGCThreads pid -XX:ConcGCThreads=1
+```
+
+没有配置的情况下：并发线程数是1
+
+查看线程状态：
+
+```
+jstat -gc pid
+```
+
+![image-20220322221701675](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322221701675.png)
+
+得出信息：
+
+```
+YGC：youngGC次数是1259次
+FGC：Full GC次数是6次
+GCT：GC总时间是5.556s
+```
+
+Jmeter压测之后的GC状态：
+
+![image-20220322221743001](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322221743001.png)
+
+得出信息：
+
+```
+YGC：youngGC次数是1600次
+FGC：Full GC次数是18次
+GCT：GC总时间是7.919s
+```
+
+由此我们可以计算出来压测过程中，发生的GC次数和GC时间差
+
+压测过程GC状态：
+
+```
+YGC：youngGC次数是 1600 - 1259 = 341次
+FGC：Full GC次数是 18 - 6 = 12次
+GCT：GC总时间是 7.919 - 5.556 = 2.363s
+```
+
+Jmeter压测结果如下：
+
+压测结果如下：
+主要关注响应时间：
+95%的请求响应时间为：16ms
+99%的请求响应时间为：28ms
+
+![image-20220322221829595](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322221829595.png)
+
+> 优化之后状态
+
+增加线程配置:
+
+```
+export CATALINA_OPTS="$CATALINA_OPTS -XX:ConcGCThreads=8"
+```
+
+观察GC状态
+
+```
+jstat -gc pid
+```
+
+tomcat启动之后的初始化GC状态：
+
+![image-20220322221943595](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322221943595.png)
+
+总结：
+YGC：youngGC次数是 1134 次
+FGC：Full GC次数是 5 次
+GCT：GC总时间是 5.234s
+
+Jmeter压测之后的GC状态：
+
+![image-20220322222016544](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322222016544.png)
+
+总结：
+YGC：youngGC次数是 1347 次
+FGC：Full GC次数是 16 次
+GCT：GC总时间是 7.149s
+
+```
+#########
+由此我们可以计算出来压测过程中，发生的GC次数和GC时间差
+ 
+压测过程GC状态：
+YGC：youngGC次数是 1347 - 1134 = 213次
+FGC：Full GC次数是 16 - 5 = 13次
+GCT：GC总时间是 7.149 - 5.234 = 1.915s   提供了线程数，使得用户响应时间降低了。
+```
+
+压测结果如下：
+主要关注响应时间：
+95%的请求响应时间为：15ms
+99%的请求响应时间为：22ms
+
+![image-20220322222126474](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322222126474.png)
+
+
+
+总结：
+
+==配置完线程数之后，我们的请求的平均响应时间和GC时间都有一个明显的减少了，仅从效果上来看，我们这次的优化是有一定效果的。大家在工作中对于线上项目进行优化的时候，可以考虑到这方面的优化==（前提是G1垃圾回收器）。
 
 ### 3.6 性能优化案例6：调整垃圾回收器提高服务的吞吐量
 
+系统配置是单核，我们看到日志，显示DefNew，说明我们用的是串行收集器，SerialGC
+
+那么就考虑切换一下并行收集器是否可以提高性能，增加配置如下：
+
+```
+export CATALINA_OPTS="$CATALINA_OPTS -Xms60m"
+export CATALINA_OPTS="$CATALINA_OPTS -Xmx60m"
+export CATALINA_OPTS="$CATALINA_OPTS -XX:+UseParallelGC"
+export CATALINA_OPTS="$CATALINA_OPTS -XX:+PrintGCDetails"
+export CATALINA_OPTS="$CATALINA_OPTS -XX:MetaspaceSize=64m"
+export CATALINA_OPTS="$CATALINA_OPTS -XX:+PrintGCDateStamps"
+export CATALINA_OPTS="$CATALINA_OPTS -Xloggc:/opt/tomcat8.5/logs/gc6.log"
+```
+
+查看GC状态：
+
+![image-20220322222246990](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322222246990.png)
+
+发生3次FullGC，可以接受
+
+![image-20220322222313339](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322222313339.png)
+
+查看吞吐量，997.6/sec，吞吐量并没有明显变化，我们究其原因，本身UseParallelGC是并行收集器，但是我们的服务器是单核。
+
+接下来我们把服务器改为8核。
+
+![image-20220322222347131](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322222347131.png)
+
+8核状态下的性能表现如下，吞吐量大幅提升，甚至翻了一倍，这说明我们在多核机器上面采用并行收集器对于系统的吞吐量有一个显著的效果。
+
+```
+接下来我们改为G1收集器看看效果
+ 
+export CATALINA_OPTS="$CATALINA_OPTS -XX:+UseG1GC"
+export CATALINA_OPTS="$CATALINA_OPTS -Xms60m"
+export CATALINA_OPTS="$CATALINA_OPTS -Xmx60m"
+export CATALINA_OPTS="$CATALINA_OPTS -XX:+PrintGCDetails"
+export CATALINA_OPTS="$CATALINA_OPTS -XX:MetaspaceSize=64m"
+export CATALINA_OPTS="$CATALINA_OPTS -XX:+PrintGCDateStamps"
+export CATALINA_OPTS="$CATALINA_OPTS -Xloggc:/opt/tomcat8.5/logs/gc6.log"
+```
+
+查看GC状态：
+
+![image-20220322222416883](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322222416883.png)
+
+没有产生FullGC，效果较之前有提升。
+
+查看压测效果，吞吐量也是比串行收集器效果更佳，而且没有了FullGC。此次优化较为成功。
+
+![image-20220322222439260](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322222439260.png)
+
+
+
 ### 3.7 性能优化案例7：日均百万级订单交易系统如何设置JVM参数
 
+![image-20220322222557686](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322222557686.png)
+
+第二个层面问题：如果要求响应时间控制在100ms如何实现？
+
+配置GC参数：-XX:MaxGCPauseMillis 、 -XX:ConcGCThreads 
+
+根据log日志、dump文件分析，优化内存空间的比例
+
+
+
 ### 3.8 面试小结
+
+1、分而治之
+
+12306遭遇春节大规模抢票如何支撑？
+
+12306号称是国内并发量最大的秒杀网站，并发量达到百万级别。
+
+普通电商订单-->  下单 --> 订单系统（IO）减库存 ---> 等待用户付款
+
+12306一种可能的模型：下单 --> 减库存和订单（redis、kafka）同时异步进行 --> 等付款
+但减库存最后还会把压力压到一台服务器上。如何？
+
+分布式本地库存+单独服务器做库存均衡！
+
+
+
+问题二：==系统CPU经常100%，如何调优？==（面试高频）
+CPU100%的话，一定是有线程占用系统资源。具体步骤前面已经讲过。
+
+注意： 工作中有时候是工作线程100%占用了CPU，还有可能是垃圾回收线程占用了100%
+
+
+问题三：==系统内存飙高，如何查找问题？==（面试高频）
+
+一方面：jmap -heap 、jstat 、... ; gc日志情况
+另一方面：dump文件分析
+
+
+问题四：如何监控JVM
+ > 命令行工具
+
+> 图形化界面工具  visule VM 
+
