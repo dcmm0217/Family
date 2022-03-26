@@ -10,7 +10,7 @@
 
 - lock await signal
 
-![image-20211109140533221](https://gitee.com/huangwei0123/image/raw/master/img/image-20211109140533221.png)
+![image-20211109140533221](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211109140533221.png)
 
 ## 问题：
 
@@ -60,7 +60,7 @@ AA打印5次，BB打印10次，CC打印15次
 
 也就是我们需要实现一个链式唤醒的操作
 
-![image-20211109142408375](https://gitee.com/huangwei0123/image/raw/master/img/image-20211109142408375.png)
+![image-20211109142408375](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211109142408375.png)
 
 当A线程执行完后，B线程才能执行，然后B线程执行完成后，C线程才执行
 

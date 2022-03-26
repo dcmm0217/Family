@@ -55,7 +55,7 @@ public class CASDemo {
 
 这是因为我们执行第一个的时候，期望值和原本值是满足的，因此修改成功，但是第二次后，主内存的值已经修改成了2019，不满足期望值，因此返回了false，本次写入失败
 
-![image-20211027114533832](https://gitee.com/huangwei0123/image/raw/master/img/image-20211027114533832.png)
+![image-20211027114533832](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211027114533832.png)
 
 这个就类似于SVN或者Git的版本号，如果没有人更改过，就能够正常提交，否者需要先将代码pull下来，合并代码后，然后提交
 
@@ -63,13 +63,13 @@ public class CASDemo {
 
 首先我们先看看 atomicInteger.getAndIncrement()方法的源码
 
-![image-20211027162108251](https://gitee.com/huangwei0123/image/raw/master/img/image-20211027162108251.png)
+![image-20211027162108251](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211027162108251.png)
 
 从这里能够看到，底层又调用了一个unsafe类的getAndAddInt方法
 
 #### Unsafe类
 
-![image-20211027162235379](https://gitee.com/huangwei0123/image/raw/master/img/image-20211027162235379.png)
+![image-20211027162235379](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211027162235379.png)
 
 **Unsafe是CAS的核心类**，由于Java方法无法直接访问底层系统，需要通过本地（Native）方法来访问，Unsafe相当于一个后门，**基于该类可以直接操作特定的内存数据**。Unsafe类存在sun.misc包中，**其内部方法操作可以像C的指针一样直接操作内存，因为Java中的CAS操作的执行依赖于Unsafe类的方法。**
 
@@ -81,7 +81,7 @@ public class CASDemo {
 
 表示该变量值在内存中的偏移地址，因为Unsafe就是根据内存偏移地址获取数据的。
 
-![image-20211027162108251](https://gitee.com/huangwei0123/image/raw/master/img/image-20211027162108251.png)
+![image-20211027162108251](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211027162108251.png)
 
 从这里我们能够看到，通过valueOffset，直接通过内存地址，获取到值，然后进行加1的操作
 
@@ -89,7 +89,7 @@ public class CASDemo {
 
 保证了多线程之间的内存可见性
 
-![image-20211027170956259](https://gitee.com/huangwei0123/image/raw/master/img/image-20211027170956259.png)
+![image-20211027170956259](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211027170956259.png)
 
 var5：就是我们从**主内存中拷贝到工作内存中的值**(每次都要从主内存拿到最新的值到自己的本地内存，然后执行compareAndSwapInt()在再和主内存的值进行比较。**因为线程不可以直接越过高速缓存，直接操作主内存**，所以执行上述方法需要比较一次，在执行加1操作)
 
@@ -273,7 +273,7 @@ count
 
 原因是：CAS底层实现是在一个死循环中不断地尝试修改目标值，直到修改成功。如果竞争不激烈的时候，修改成功率很高，否则失败率很高。在失败的时候，这些重复的原子性操作会耗费性能。（不停的**自旋**，进入一个无限重复的循环中）
 
-![image-20211027182534815](https://gitee.com/huangwei0123/image/raw/master/img/image-20211027182534815.png)
+![image-20211027182534815](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211027182534815.png)
 
 **核心思想：将热点数据分离。**
 
@@ -303,7 +303,7 @@ public void add(long x) {
 
 于是，当当当当，Java 8推出了一个新的类，**LongAdder**，他就是尝试使用分段CAS以及自动分段迁移的方式来大幅度提升多线程高并发执行CAS操作的性能！
 
-![image-20211027182753922](https://gitee.com/huangwei0123/image/raw/master/img/image-20211027182753922.png)
+![image-20211027182753922](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211027182753922.png)
 
 在LongAdder的底层实现中，首先有一个base值，刚开始多线程来不停的累加数值，都是对base进行累加的，比如刚开始累加成了base = 5。
 
@@ -319,7 +319,7 @@ public void add(long x) {
 
 最后，如果你要从LongAdder中获取当前累加的总值，就会把base值和所有Cell分段数值加起来返回给你。
 
-![image-20211027182837114](https://gitee.com/huangwei0123/image/raw/master/img/image-20211027182837114.png)
+![image-20211027182837114](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211027182837114.png)
 
 如上图所示，LongAdder则是内部维护多个Cell变量，每个Cell里面有一个初始值为0的long型变量，在同等并发量的情况下，争夺单个变量的线程会减少，这是变相的减少了争夺共享资源的并发量，另外多个线程在争夺同一个原子变量时候，
 
@@ -331,20 +331,20 @@ Cell 类型是Atomic的一个改进，用来减少缓存的争用，对于大多
 
 **LongAdder的add操作图**
 
-![image-20211027182925002](https://gitee.com/huangwei0123/image/raw/master/img/image-20211027182925002.png)
+![image-20211027182925002](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211027182925002.png)
 
 可以看到，只有从未出现过并发冲突的时候，base基数才会使用到，一旦出现了并发冲突，之后所有的操作都只针对Cell[]数组中的单元Cell。
 如果Cell[]数组未初始化，会调用父类的longAccumelate去初始化Cell[]，如果Cell[]已经初始化但是冲突发生在Cell单元内，则也调用父类的longAccumelate，此时可能就需要对Cell[]扩容了。
 **另外由于Cells占用内存是相对比较大的，所以一开始并不创建，而是在需要时候再创建，也就是惰性加载，当一开始没有空间时候，所有的更新都是操作base变量。**
 
-![image-20211027183019761](https://gitee.com/huangwei0123/image/raw/master/img/image-20211027183019761.png)
+![image-20211027183019761](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211027183019761.png)
 
 如上图代码：
 例如32、64位操作系统的缓存行大小不一样，因此JAVA8中就增加了一个注`@sun.misc.Contended`解用于解决这个问题,由JVM去插入这些变量，[具体可以参考openjdk.java.net/jeps/142](http://xn--openjdk-hc5k25at0ntqhnpa7548b.java.net/jeps/142) ，但是通常来说对象是不规则的分配到内存中的，但是数组由于是连续的内存，因此可能会共享缓存行，因此这里加一个Contended注解以防cells数组发生伪共享的情况。
 
 为了降低高并发下多线程对一个变量CAS争夺失败后大量线程会自旋而造成降低并发性能问题，LongAdder内部通过根据并发请求量来维护多个Cell元素(一个动态的Cell数组)来分担对单个变量进行争夺资源。
 
-![image-20211027183045987](https://gitee.com/huangwei0123/image/raw/master/img/image-20211027183045987.png)
+![image-20211027183045987](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211027183045987.png)
 
 可以看到LongAdder继承自Striped64类，Striped64内部维护着三个变量，LongAdder的真实值其实就是base的值与Cell数组里面所有Cell元素值的累加，base是个基础值，默认是0，cellBusy用来实现自旋锁，当创建Cell元素或者扩容Cell数组时候用来进行线程间的同步。
 

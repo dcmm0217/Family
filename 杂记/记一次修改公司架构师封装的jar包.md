@@ -26,11 +26,11 @@ successList:[]
 
 第一次导入成功
 
-![image-20211030165424484](https://gitee.com/huangwei0123/image/raw/master/img/image-20211030165424484.png)
+![image-20211030165424484](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211030165424484.png)
 
 第二次导入失败
 
-![image-20211030165545062](https://gitee.com/huangwei0123/image/raw/master/img/image-20211030165545062.png)
+![image-20211030165545062](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211030165545062.png)
 
 第三次导入成功，错误信息依然存在
 

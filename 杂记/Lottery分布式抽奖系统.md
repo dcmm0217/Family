@@ -31,7 +31,7 @@ public class LotteryInterfacesApplication {
 
 在启动类中要开启@EnableDubbo
 
-![image-20220323223900319](https://gitee.com/huangwei0123/image/raw/master/img/image-20220323223900319.png)
+![image-20220323223900319](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220323223900319.png)
 
 消费者
 
@@ -53,4 +53,7 @@ public class ApiTest {
 }
 ```
 
-![image-20220323224040835](https://gitee.com/huangwei0123/image/raw/master/img/image-20220323224040835.png)
+![image-20220323224040835](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220323224040835.png)
+
+
+

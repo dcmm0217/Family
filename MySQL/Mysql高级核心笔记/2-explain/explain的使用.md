@@ -6,7 +6,7 @@
 
 整个流程划分成了` 观察（Show status）` 和 `行动（Action）` 两个部分。字母 **S 的部分代表观察（会使用相应的分析工具）**，**字母 A 代表的部分是行动（对应分析可以采取的行动）。**
 
-![image-20220122161044039](https://gitee.com/huangwei0123/image/raw/master/img/image-20220122161044039.png)
+![image-20220122161044039](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220122161044039.png)
 
 我们可以通过观察了解数据库整体的运行状态，通过性能分析工具可以让我们了解执行慢的SQL都有哪些，查看具体的SQL执行计划，甚至是SQL执行中的每一步的成本代价，这样才能定位问题所在，找到了问题，再采取相应的行动。
 
@@ -14,7 +14,7 @@
 
 `慢查询`,`EXPLAIN`,`SHOW PROFILING`
 
-![image-20220122161519755](https://gitee.com/huangwei0123/image/raw/master/img/image-20220122161519755.png)
+![image-20220122161519755](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220122161519755.png)
 
 ## 2、查看系统性能参数
 
@@ -81,7 +81,7 @@ WHERE id = 900001;
 
 然后再看下查询优化器的成本，实际上我们只需要检索一个页即可：
 
-![image-20220122163012148](https://gitee.com/huangwei0123/image/raw/master/img/image-20220122163012148.png)
+![image-20220122163012148](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220122163012148.png)
 
 如果我们想要查询 id 在 900001 到 9000100 之间的学生记录呢？
 
@@ -94,7 +94,7 @@ WHERE id BETWEEN 900001 AND 900100;
 
 然后再看下查询优化器的成本，这时我们大概需要进行 21 个页的查询。
 
-![image-20220122163040720](https://gitee.com/huangwei0123/image/raw/master/img/image-20220122163040720.png)
+![image-20220122163040720](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220122163040720.png)
 
 你能看到**页的数量**是刚才的 20 倍，但是**查询的效率并没有明显的变化**，实际上这两个 SQL 查询的时间基本上一样，就是==因为采用了顺序读取的方式将页面一次性加载到缓冲池中，然后再进行查找==。虽然 `页 数量（last_query_cost）增加了不少` ，但是**通过缓冲池的机制**，并 `没有增加多少查询时间 `。
 
@@ -132,7 +132,7 @@ show variables like '%slow_query_log'
 set global slow_query_log='ON';
 ```
 
-![image-20220122172759256](https://gitee.com/huangwei0123/image/raw/master/img/image-20220122172759256.png)
+![image-20220122172759256](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220122172759256.png)
 
 你能看到这时慢查询分析已经开启，同时文件保存在 `/var/lib/mysql/atguigu02-slow.log` 文件中。
 
@@ -144,7 +144,7 @@ set global slow_query_log='ON';
 show variables like '%long_query_time%';
 ```
 
-![image-20220122172952252](https://gitee.com/huangwei0123/image/raw/master/img/image-20220122172952252.png)
+![image-20220122172952252](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220122172952252.png)
 
 这里如果我们想把时间缩短，比如设置为 1 秒，可以这样设置：
 
@@ -202,11 +202,11 @@ SHOW GLOBAL STATUS LIKE '%slow_queries%';
 
 `mysqldumpslow --help`
 
-![image-20220122174827463](https://gitee.com/huangwei0123/image/raw/master/img/image-20220122174827463.png)
+![image-20220122174827463](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220122174827463.png)
 
 mysqldumpslow 命令的具体参数如下：
 
-![image-20220122175417868](https://gitee.com/huangwei0123/image/raw/master/img/image-20220122175417868.png)
+![image-20220122175417868](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220122175417868.png)
 
 举例：我们想要按照查询时间排序，查看前五条 SQL 语句，这样写即可：
 
@@ -214,7 +214,7 @@ mysqldumpslow 命令的具体参数如下：
 mysqldumpslow -s t -t 5 /var/lib/mysql/atguigu01-slow.log
 ```
 
-![image-20220122175452590](https://gitee.com/huangwei0123/image/raw/master/img/image-20220122175452590.png)
+![image-20220122175452590](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220122175452590.png)
 
 **工作常用参考：**
 
@@ -282,7 +282,7 @@ SHOW VARIABLES LIKE '%long_query_time%';
 show variables like 'slow_query_log%'；
 ```
 
-![image-20220122175959877](https://gitee.com/huangwei0123/image/raw/master/img/image-20220122175959877.png)
+![image-20220122175959877](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220122175959877.png)
 
 从执行结果可以看出，慢查询日志的目录默认为mysql的数据目录，在该目录下`手动删除慢查询日志文件`即可。
 
@@ -302,7 +302,7 @@ mysqladmin -uroot -p flush-logs slow
 show variables like 'profiling';
 ```
 
-![image-20220123003655697](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123003655697.png)
+![image-20220123003655697](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220123003655697.png)
 
 通过设置` profiling='ON’ `来开启 show profile：
 
@@ -310,7 +310,7 @@ show variables like 'profiling';
 mysql > set profiling = 'ON';
 ```
 
-![image-20220123003721970](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123003721970.png)
+![image-20220123003721970](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220123003721970.png)
 
 然后执行相关的查询语句。接着看下当前会话都有哪些 profiles，使用下面这条命令：
 
@@ -318,7 +318,7 @@ mysql > set profiling = 'ON';
 mysql > show profiles;
 ```
 
-![image-20220123003737932](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123003737932.png)
+![image-20220123003737932](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220123003737932.png)
 
 你能看到当前会话一共有 2 个查询。如果我们想要查看最近一次查询的开销，可以使用：
 
@@ -326,13 +326,13 @@ mysql > show profiles;
 mysql > show profile;
 ```
 
-![image-20220123003756777](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123003756777.png)
+![image-20220123003756777](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220123003756777.png)
 
 ```sql
 mysql> show profile cpu,block io for query 2;
 ```
 
-![image-20220123003810021](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123003810021.png)
+![image-20220123003810021](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220123003810021.png)
 
 show profile的常用查询参数:
 
@@ -378,7 +378,7 @@ mysql> EXPLAIN SELECT 1
 
 EXPLAIN 语句输出的各个列的作用如下：
 
-![image-20220123170127725](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123170127725.png)
+![image-20220123170127725](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220123170127725.png)
 
 #### 6.2 准备数据
 
@@ -544,7 +544,7 @@ CALL insert_s2(10001,10000);
 EXPLAIN select * from s1;
 ```
 
-![image-20220123180559997](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123180559997.png)
+![image-20220123180559997](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220123180559997.png)
 
 这个查询语句只涉及对s1表的单表查询，所以`EXPLAIN`输出只有1条记录，其中的table列的值是s1，表明这条记录是用来说明对s1表的单表访问方法的。
 
@@ -554,7 +554,7 @@ EXPLAIN select * from s1;
 EXPLAIN select * from s1 inner join s2;
 ```
 
-![image-20220123183252069](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123183252069.png)
+![image-20220123183252069](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220123183252069.png)
 
 ##### 2、Id
 
@@ -576,7 +576,7 @@ WHERE s1.common_field = 'a';
 EXPLAIN SELECT * FROM s1 WHERE key1 = 'a';
 ```
 
-![image-20220123183709306](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123183709306.png)
+![image-20220123183709306](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220123183709306.png)
 
 ```sql
 # 查询优化器可能对涉及子查询的查询语句进行重写，转变为多表查询的操作 
@@ -584,20 +584,20 @@ EXPLAIN SELECT * FROM s1 WHERE key1 IN (SELECT key2 FROM s2 WHERE common_field
 = 'a');
 ```
 
-![image-20220123190740814](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123190740814.png)
+![image-20220123190740814](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220123190740814.png)
 
 ```sql
 # union 会默认去重，union all 不会
 EXPLAIN SELECT * FROM s1 UNION SELECT * FROM s2;
 ```
 
-![image-20220123191136149](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123191136149.png)
+![image-20220123191136149](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220123191136149.png)
 
 ```sql
 EXPLAIN SELECT * FROM s1 UNION ALL SELECT * FROM s2;
 ```
 
-![image-20220123191159743](https://gitee.com/huangwei0123/image/raw/master/img/image-20220123191159743.png)
+![image-20220123191159743](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220123191159743.png)
 
 小结:
 
@@ -611,7 +611,7 @@ EXPLAIN SELECT * FROM s1 UNION ALL SELECT * FROM s2;
 
 MYSQL为每一个关键字代表的小查询定义了一个称之为`select_type`属性，意思是我们只要知道了某个小查询的`select_types`属性，就知道了这个`小查询在整个大查询中扮演了一个什么角色`，我们看一下，select_type都能取哪些值。
 
-![image-20220124083635845](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124083635845.png)
+![image-20220124083635845](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124083635845.png)
 
 具体分析如下：
 
@@ -619,7 +619,7 @@ MYSQL为每一个关键字代表的小查询定义了一个称之为`select_type
 EXPLAIN SELECT * FROM s1;
 ```
 
-![image-20220124083806018](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124083806018.png)
+![image-20220124083806018](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124083806018.png)
 
 当然，连接查询也算是 SIMPLE 类型，比如:
 
@@ -627,7 +627,7 @@ EXPLAIN SELECT * FROM s1;
 EXPLAIN SELECT * FROM s1 INNER JOIN s2;
 ```
 
-![image-20220124083826630](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124083826630.png)
+![image-20220124083826630](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124083826630.png)
 
 > PRIMARY
 
@@ -635,7 +635,7 @@ EXPLAIN SELECT * FROM s1 INNER JOIN s2;
 EXPLAIN SELECT * FROM s1 UNION SELECT * FROM s2;
 ```
 
-![image-20220124083927951](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124083927951.png)
+![image-20220124083927951](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124083927951.png)
 
 > SUBQUERY
 
@@ -643,7 +643,7 @@ EXPLAIN SELECT * FROM s1 UNION SELECT * FROM s2;
 EXPLAIN SELECT * FROM s1 WHERE key1 IN (SELECT key1 FROM s2) OR key3 = 'a';
 ```
 
-![image-20220124083958683](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124083958683.png)
+![image-20220124083958683](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124083958683.png)
 
 > DEPENDENT SUBQUERY 
 
@@ -651,7 +651,7 @@ EXPLAIN SELECT * FROM s1 WHERE key1 IN (SELECT key1 FROM s2) OR key3 = 'a';
 EXPLAIN SELECT * FROM s1 WHERE key1 IN (SELECT key1 FROM s2 WHERE s1.key2 = s2.key2) OR key3 = 'a';
 ```
 
-![image-20220124084023966](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124084023966.png)
+![image-20220124084023966](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124084023966.png)
 
 > DEPENDENT UNION 
 
@@ -659,7 +659,7 @@ EXPLAIN SELECT * FROM s1 WHERE key1 IN (SELECT key1 FROM s2 WHERE s1.key2 = s2.k
 EXPLAIN SELECT * FROM s1 WHERE key1 IN (SELECT key1 FROM s2 WHERE key1 = 'a' UNION SELECT key1 FROM s1 WHERE key1 = 'b');
 ```
 
-![image-20220124084043300](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124084043300.png)
+![image-20220124084043300](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124084043300.png)
 
 > DERIVED
 
@@ -667,7 +667,7 @@ EXPLAIN SELECT * FROM s1 WHERE key1 IN (SELECT key1 FROM s2 WHERE key1 = 'a' UNI
  EXPLAIN SELECT * FROM (SELECT key1, count(*) as c FROM s1 GROUP BY key1) AS derived_s1 where c > 1;
 ```
 
-![image-20220124084105929](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124084105929.png)
+![image-20220124084105929](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124084105929.png)
 
 > MATERIALIZED
 
@@ -675,7 +675,7 @@ EXPLAIN SELECT * FROM s1 WHERE key1 IN (SELECT key1 FROM s2 WHERE key1 = 'a' UNI
  EXPLAIN SELECT * FROM s1 WHERE key1 IN (SELECT key1 FROM s2);
 ```
 
-![image-20220124084142531](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124084142531.png)
+![image-20220124084142531](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124084142531.png)
 
 ##### 4、type✳
 
@@ -699,7 +699,7 @@ INSERT INTO t VALUES(1);
 EXPLAIN SELECT * FROM t;
 ```
 
-![image-20220124085223270](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085223270.png)
+![image-20220124085223270](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124085223270.png)
 
 - **const**
 
@@ -709,7 +709,7 @@ EXPLAIN SELECT * FROM t;
 EXPLAIN SELECT * FROM s1 WHERE id = 10005;
 ```
 
-![image-20220124085252611](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085252611.png)
+![image-20220124085252611](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124085252611.png)
 
 - **eq_ref**
 
@@ -719,7 +719,7 @@ EXPLAIN SELECT * FROM s1 WHERE id = 10005;
 EXPLAIN SELECT * FROM s1 INNER JOIN s2 ON s1.id = s2.id;
 ```
 
-![image-20220124085317331](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085317331.png)
+![image-20220124085317331](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124085317331.png)
 
 从执行计划的结果中可以看出，**MySQL打算将s2作为驱动表，s1作为被驱动表**，重点关注s1的访问方法是 eq_ref ，表明在访问s1表的时候可以 通过主键的等值匹配 来进行访问。
 
@@ -731,7 +731,7 @@ EXPLAIN SELECT * FROM s1 INNER JOIN s2 ON s1.id = s2.id;
  EXPLAIN SELECT * FROM s1 WHERE key1 = 'a';
 ```
 
-![image-20220124085412155](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085412155.png)
+![image-20220124085412155](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124085412155.png)
 
 - **ref_or_null**
 
@@ -741,7 +741,7 @@ EXPLAIN SELECT * FROM s1 INNER JOIN s2 ON s1.id = s2.id;
 EXPLAIN SELECT * FROM s1 WHERE key1 = 'a' OR key1 IS NULL;
 ```
 
-![image-20220124085439903](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085439903.png)
+![image-20220124085439903](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124085439903.png)
 
 - **index_merge** 
 
@@ -749,7 +749,7 @@ EXPLAIN SELECT * FROM s1 WHERE key1 = 'a' OR key1 IS NULL;
 EXPLAIN SELECT * FROM s1 WHERE key1 = 'a' OR key3 = 'a';
 ```
 
-![image-20220124085507076](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085507076.png)
+![image-20220124085507076](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124085507076.png)
 
 从执行计划的 `type `列的值是 `index_merge `就可以看出，MySQL 打算使用索引合并的方式来执行对 s1 表的查询
 
@@ -761,7 +761,7 @@ EXPLAIN SELECT * FROM s1 WHERE key1 = 'a' OR key3 = 'a';
 EXPLAIN SELECT * FROM s1 WHERE key2 IN (SELECT id FROM s2 where s1.key1 = s2.key1) OR key3 = 'a';
 ```
 
-![image-20220124085556102](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085556102.png)
+![image-20220124085556102](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124085556102.png)
 
 - **index_subquery**
 
@@ -769,7 +769,7 @@ EXPLAIN SELECT * FROM s1 WHERE key2 IN (SELECT id FROM s2 where s1.key1 = s2.key
 EXPLAIN SELECT * FROM s1 WHERE common_field IN (SELECT key3 FROM s2 where s1.key1 = s2.key1) OR key3 = 'a';
 ```
 
-![image-20220124085623681](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085623681.png)
+![image-20220124085623681](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124085623681.png)
 
 - **range**
 
@@ -779,7 +779,7 @@ EXPLAIN SELECT * FROM s1 WHERE common_field IN (SELECT key3 FROM s2 where s1.key
 EXPLAIN SELECT * FROM s1 WHERE key1 IN ('a', 'b', 'c');
 ```
 
-![image-20220124085653653](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085653653.png)
+![image-20220124085653653](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124085653653.png)
 
 - **index**
 
@@ -789,7 +789,7 @@ EXPLAIN SELECT * FROM s1 WHERE key1 IN ('a', 'b', 'c');
 EXPLAIN SELECT key_part2 FROM s1 WHERE key_part3 = 'a';
 ```
 
-![image-20220124085722888](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085722888.png)
+![image-20220124085722888](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124085722888.png)
 
 - ALL
 
@@ -799,7 +799,7 @@ EXPLAIN SELECT key_part2 FROM s1 WHERE key_part3 = 'a';
 EXPLAIN SELECT * FROM s1;
 ```
 
-![image-20220124085743510](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124085743510.png)
+![image-20220124085743510](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124085743510.png)
 
 结果值从最好到最坏依次是：
 
@@ -821,7 +821,7 @@ key：真正使用的索引
 EXPLAIN SELECT * FROM s1 WHERE key1 > 'z' AND key3 = 'a';
 ```
 
-![image-20220124091129038](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124091129038.png)
+![image-20220124091129038](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124091129038.png)
 
 ##### 6、key_len✳
 
@@ -835,31 +835,31 @@ EXPLAIN SELECT * FROM s1 WHERE key1 > 'z' AND key3 = 'a';
 EXPLAIN SELECT * FROM s1 WHERE id = 10005;
 ```
 
-![image-20220124091246578](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124091246578.png)
+![image-20220124091246578](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124091246578.png)
 
 ```sql
 EXPLAIN SELECT * FROM s1 WHERE key2 = 10126;
 ```
 
-![image-20220124091822179](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124091822179.png)
+![image-20220124091822179](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124091822179.png)
 
 ```sql
 EXPLAIN SELECT * FROM s1 WHERE key1 = 'a';
 ```
 
-![image-20220124091939462](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124091939462.png)
+![image-20220124091939462](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124091939462.png)
 
 ```sql
 EXPLAIN SELECT * FROM s1 WHERE key_part1 = 'a';
 ```
 
-![image-20220124091952637](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124091952637.png)
+![image-20220124091952637](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124091952637.png)
 
 ```sql
 EXPLAIN SELECT * FROM s1 WHERE key_part1 = 'a' AND key_part2 = 'b';
 ```
 
-![image-20220124092008353](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124092008353.png)
+![image-20220124092008353](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124092008353.png)
 
 ##### 7、ref
 
@@ -869,19 +869,19 @@ EXPLAIN SELECT * FROM s1 WHERE key_part1 = 'a' AND key_part2 = 'b';
 EXPLAIN SELECT * FROM s1 WHERE key1 = 'a';
 ```
 
-![image-20220124092323736](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124092323736.png)
+![image-20220124092323736](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124092323736.png)
 
 ```sql
 EXPLAIN SELECT * FROM s1 INNER JOIN s2 ON s1.id = s2.id;
 ```
 
-![image-20220124092342301](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124092342301.png)
+![image-20220124092342301](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124092342301.png)
 
 ```sql
 EXPLAIN SELECT * FROM s1 INNER JOIN s2 ON s2.key1 = UPPER(s1.key1);
 ```
 
-![image-20220124093105568](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124093105568.png)
+![image-20220124093105568](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124093105568.png)
 
 ##### 8、**rows**✳
 
@@ -891,7 +891,7 @@ EXPLAIN SELECT * FROM s1 INNER JOIN s2 ON s2.key1 = UPPER(s1.key1);
 EXPLAIN SELECT * FROM s1 WHERE key1 > 'z';
 ```
 
-![image-20220124093144576](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124093144576.png)
+![image-20220124093144576](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124093144576.png)
 
 ##### **9、filtered** 
 
@@ -903,13 +903,13 @@ EXPLAIN SELECT * FROM s1 WHERE key1 > 'z';
  EXPLAIN SELECT * FROM s1 WHERE key1 > 'z' AND common_field = 'a';
 ```
 
-![image-20220124124909633](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124124909633.png)
+![image-20220124124909633](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124124909633.png)
 
 ```sql
 EXPLAIN SELECT * FROM s1 INNER JOIN s2 ON s1.key1 = s2.key1 WHERE s1.common_field = 'a';
 ```
 
-![image-20220124124942982](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124124942982.png)
+![image-20220124124942982](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124124942982.png)
 
 ##### 10、Extra✳
 
@@ -931,7 +931,7 @@ EXPLAIN select 1;
 EXPLAIN SELECT * FROM s1 WHERE 1 != 1;
 ```
 
-![image-20220124125409622](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124125409622.png)
+![image-20220124125409622](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124125409622.png)
 
 - Using where
 
@@ -941,7 +941,7 @@ EXPLAIN SELECT * FROM s1 WHERE 1 != 1;
  EXPLAIN SELECT * FROM s1 WHERE common_field = 'a';
 ```
 
-![image-20220124125617432](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124125617432.png)
+![image-20220124125617432](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124125617432.png)
 
 - Using index
 
@@ -953,7 +953,7 @@ EXPLAIN SELECT * FROM s1 WHERE 1 != 1;
 EXPLAIN SELECT key1 FROM s1 WHERE key1 = 'a';
 ```
 
-![image-20220124125824989](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124125824989.png)
+![image-20220124125824989](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124125824989.png)
 
 - using index conditions
 
@@ -963,7 +963,7 @@ EXPLAIN SELECT key1 FROM s1 WHERE key1 = 'a';
 EXPLAIN SELECT * FROM s1 WHERE key1 > 'z' AND key1 LIKE '%b';
 ```
 
-![image-20220124125959731](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124125959731.png)
+![image-20220124125959731](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124125959731.png)
 
 
 
@@ -975,7 +975,7 @@ EXPLAIN SELECT * FROM s1 WHERE key1 > 'z' AND key1 LIKE '%b';
 EXPLAIN SELECT * FROM s1 INNER JOIN s2 ON s1.common_field = s2.common_field;
 ```
 
-![image-20220124130203314](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124130203314.png)
+![image-20220124130203314](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124130203314.png)
 
 - Using filesort
 
@@ -985,7 +985,7 @@ EXPLAIN SELECT * FROM s1 INNER JOIN s2 ON s1.common_field = s2.common_field;
 EXPLAIN SELECT * FROM s1 ORDER BY key1 LIMIT 10;
 ```
 
-![image-20220124130418422](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124130418422.png)
+![image-20220124130418422](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124130418422.png)
 
 - Using temporary
 
@@ -997,7 +997,7 @@ Mysql借助临时表来完成一些功能，比如去重，排序之类的。
 EXPLAIN SELECT DISTINCT common_field FROM s1;
 ```
 
-![image-20220124130753376](https://gitee.com/huangwei0123/image/raw/master/img/image-20220124130753376.png)
+![image-20220124130753376](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220124130753376.png)
 
 #### 6.4 小结
 
@@ -1022,7 +1022,7 @@ EXPLAIN SELECT DISTINCT common_field FROM s1;
 EXPLAIN SELECT s1.key1, s2.key1 FROM s1 LEFT JOIN s2 ON s1.key1 = s2.key1 WHERE s2.common_field IS NOT NULL;
 ```
 
-![image-20220125102914117](https://gitee.com/huangwei0123/image/raw/master/img/image-20220125102914117.png)
+![image-20220125102914117](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220125102914117.png)
 
 ```mysql
 mysql> SHOW WARNINGS\G *************************** 1. row *************************** Level: Note Code: 1003 Message: /* select#1 */ select `atguigu`.`s1`.`key1` AS `key1`,`atguigu`.`s2`.`key1` AS `key1` from `atguigu`.`s1` join `atguigu`.`s2` where ((`atguigu`.`s1`.`key1` = `atguigu`.`s2`.`key1`) and (`atguigu`.`s2`.`common_field` is not null)) 1 row in set (0.00 sec)
@@ -1057,15 +1057,15 @@ select * from student where id < 10;
 select * from information_schema.optimizer_trace\G
 ```
 
-![image-20220125103428694](https://gitee.com/huangwei0123/image/raw/master/img/image-20220125103428694.png)
+![image-20220125103428694](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220125103428694.png)
 
 
 
-![image-20220125103452964](https://gitee.com/huangwei0123/image/raw/master/img/image-20220125103452964.png)
+![image-20220125103452964](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220125103452964.png)
 
-![image-20220125103506197](https://gitee.com/huangwei0123/image/raw/master/img/image-20220125103506197.png)
+![image-20220125103506197](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220125103506197.png)
 
-![image-20220125103519218](https://gitee.com/huangwei0123/image/raw/master/img/image-20220125103519218.png)
+![image-20220125103519218](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220125103519218.png)
 
 ## 9、Mysql监控分析视图-sys schema
 

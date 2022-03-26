@@ -38,7 +38,7 @@
 
 我们只需要记录一下：将0号表空间的10号页面的偏移量为100处的值更新为2。
 
-![image-20220129230321191](https://gitee.com/huangwei0123/image/raw/master/img/image-20220129230321191.png)
+![image-20220129230321191](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220129230321191.png)
 
 innoDB引擎的事务采用了`WAL技术`（**write-ahead logging**），这种技术的思想就是先写日志，再写磁盘，只有日志写入成功，才算事务提交成功，这里的日志就是redo log。当发生宕机且数据未刷到磁盘的时候，可以通过redo log来恢复，保证ACID中的D（持久性）,这就是redo的作用。
 
@@ -69,7 +69,7 @@ redo log可以简单分成以下两部分
 
 在服务器启动时就向操作系统申请了一大片称之为redo log buffer的`连续内存`空间，翻译成中文就是redo日志缓冲区。这片内存空间被划分成若干个连续的`redo log block`。一个redo log block占用`512字节`大小。
 
-![image-20220209191142965](https://gitee.com/huangwei0123/image/raw/master/img/image-20220209191142965.png)
+![image-20220209191142965](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220209191142965.png)
 
 **参数设置：innodb_log_buffer_size：**
 
@@ -85,7 +85,7 @@ show variables like '%innodb_log_buffer_size%';
 
 以一个更新事务为例，redo log 流转过程，如下图所示：
 
-![image-20220131220257193](https://gitee.com/huangwei0123/image/raw/master/img/image-20220131220257193.png)
+![image-20220131220257193](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220131220257193.png)
 
 第1步：先将原始数据从磁盘中读入内存中来，修改数据的内存拷贝（读IO，改内存备份）
 
@@ -106,7 +106,7 @@ redo log的写入并不是直接写入磁盘的，InnoDB引擎会在写redo log�
 
 刷盘指的是 redo log buffer -> redo log file 的过程，而不是由data buffer -> 磁盘data的过程
 
-![image-20220209192512508](https://gitee.com/huangwei0123/image/raw/master/img/image-20220209192512508.png)
+![image-20220209192512508](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220209192512508.png)
 
 注意，redo log buffer刷盘到redo log file的过程并不是真正的刷到磁盘中去，只是刷入到`文件系统缓存(page cache)`中去，这是现代操作系统为了提高文件写入效率做的一个优化，真正的写入会交给系统自己来决定（比如page  cache足够大了）。那么对于innodb来说就存在一个问题，如果交给系统来同步，同样如果系统宕机，那么数据还是会丢失。（系统宕机的概率还是比较小的）。
 
@@ -120,17 +120,17 @@ redo log的写入并不是直接写入磁盘的，InnoDB引擎会在写redo log�
 
 另外，innodb存储引擎有一个后台线程，每个1s，就会把redo log buffer中的内容写到文件系统缓存（page cache），然后调用刷盘操作。
 
-![image-20220209202417497](https://gitee.com/huangwei0123/image/raw/master/img/image-20220209202417497.png)
+![image-20220209202417497](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220209202417497.png)
 
 也就是说，一个没有提交事务的redo log 记录，也可能会被刷盘。因为在事务执行过程redo log，记录是会写入redo log buffer中，这些redo log 记录会被`后台线程刷盘`。
 
-![image-20220209202826746](https://gitee.com/huangwei0123/image/raw/master/img/image-20220209202826746.png)
+![image-20220209202826746](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220209202826746.png)
 
 除了后台线程每秒`1次`的轮询操作，还有一种情况，当`redo log buffer`占用空间即将达到`innodb_log_buffer_size`（这个参数默认是16M）的一半的时候，后台线程会主动刷盘。
 
 #### 1.6 不同刷盘策略演示
 
-![image-20220209203259562](https://gitee.com/huangwei0123/image/raw/master/img/image-20220209203259562.png)
+![image-20220209203259562](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220209203259562.png)
 
 > 小结：innodb_flush_log_at_trx_commit = 1
 >
@@ -140,7 +140,7 @@ redo log的写入并不是直接写入磁盘的，InnoDB引擎会在写redo log�
 >
 > 建议使用默认值，虽然操作系统宕机的概率理论小于数据库宕机的概率，但是一般用到了事务，那么数据的安全性相对来说更重要一些。
 
-![image-20220209203717674](https://gitee.com/huangwei0123/image/raw/master/img/image-20220209203717674.png)
+![image-20220209203717674](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220209203717674.png)
 
 > 小结：innodb_flush_log_at_trx_commit = 2
 >
@@ -148,7 +148,7 @@ redo log的写入并不是直接写入磁盘的，InnoDB引擎会在写redo log�
 >
 > 如果仅仅是mysql 服务器挂了，不会有任何数据丢失，但是操作系统宕机可能会有1s的数据丢失，这种情况无法满足ACID中的D，但是数值2，肯定是效率最高的。
 
-![image-20220209205254543](https://gitee.com/huangwei0123/image/raw/master/img/image-20220209205254543.png)
+![image-20220209205254543](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220209205254543.png)
 
 > 小结：innodb_flush_log_at_trx_commit = 0
 >
@@ -166,7 +166,7 @@ Mysql把对底层页面中的一次原子访问的过程称之为一个`mini-tra
 
 一个事务可以包含若干条语句，每一条语句其实是由若干个`mtr`组成，每一个mtr又可以包含若干条redo日志，画个图包是它们的关系就是这样:
 
-![image-20220209213858058](https://gitee.com/huangwei0123/image/raw/master/img/image-20220209213858058.png)
+![image-20220209213858058](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220209213858058.png)
 
 
 
@@ -174,7 +174,7 @@ Mysql把对底层页面中的一次原子访问的过程称之为一个`mini-tra
 
 **Innodb的更新操作采用的是 write Ahead log(预先日志持久化)策略，即先写日志，再写入磁盘。**
 
-![image-20220209220145641](https://gitee.com/huangwei0123/image/raw/master/img/image-20220209220145641.png)
+![image-20220209220145641](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220209220145641.png)
 
 ## 2、undo 日志
 
@@ -255,15 +255,15 @@ show variables like 'innodb_undo_logs';
 
 **只有Buffer Pool的流程：**
 
-![image-20220211143013821](https://gitee.com/huangwei0123/image/raw/master/img/image-20220211143013821.png)
+![image-20220211143013821](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220211143013821.png)
 
 ==有了redo log 和undo log后==
 
-![image-20220211143308423](https://gitee.com/huangwei0123/image/raw/master/img/image-20220211143308423.png)
+![image-20220211143308423](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220211143308423.png)
 
 **2.** **详细生成过程**
 
-![image-20220211143457991](https://gitee.com/huangwei0123/image/raw/master/img/image-20220211143457991.png)
+![image-20220211143457991](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220211143457991.png)
 
 当我们执行insert的时候：
 
@@ -272,17 +272,17 @@ begin;
 INSERT INTO user (name) VALUES ("tom");
 ```
 
-![image-20220211144332368](https://gitee.com/huangwei0123/image/raw/master/img/image-20220211144332368.png)
+![image-20220211144332368](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220211144332368.png)
 
 当我们执行update时：
 
-![image-20220211144413767](https://gitee.com/huangwei0123/image/raw/master/img/image-20220211144413767.png)
+![image-20220211144413767](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220211144413767.png)
 
 ```sql
 UPDATE user SET id=2 WHERE id=1;
 ```
 
-![image-20220211144436006](https://gitee.com/huangwei0123/image/raw/master/img/image-20220211144436006.png)
+![image-20220211144436006](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220211144436006.png)
 
 **3.undo log是如何回滚得**
 
@@ -308,7 +308,7 @@ UPDATE user SET id=2 WHERE id=1;
 
 #### 2.6 小结
 
-![image-20220210094627994](https://gitee.com/huangwei0123/image/raw/master/img/image-20220210094627994.png)
+![image-20220210094627994](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220210094627994.png)
 
 ==undo log 是逻辑日志，对事务回滚时，只是将数据库逻辑恢复到原来的样子==
 

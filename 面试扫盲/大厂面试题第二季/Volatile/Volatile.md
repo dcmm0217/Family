@@ -45,7 +45,7 @@ JMM关于同步的规定：
 
 由于JVM运行程序的实体是线程，而每个线程创建时JVM都会为其创建一个工作内存（有些地方称为栈空间），工作内存是每个线程的私有数据区域，而Java内存模型中规定所有变量都存储在主内存，主内存是共享内存区域，所有线程都可以访问，`但线程对变量的操作（读取赋值等）必须在工作内存中进行，首先要将变量从主内存拷贝到自己的工作内存空间，然后对变量进行操作，操作完成后再将变量写会主内存`，不能直接操作主内存中的变量，各个线程中的工作内存中存储着主内存中的变量副本拷贝，因此不同的线程间无法访问对方的工作内存，线程间的通信（传值）必须通过主内存来完成，其简要访问过程：
 
-![image-20211026153438005](https://gitee.com/huangwei0123/image/raw/master/img/image-20211026153438005.png)
+![image-20211026153438005](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211026153438005.png)
 
 数据传输速率：硬盘 < 内存 < < 缓存< CPU   
 
@@ -55,7 +55,7 @@ JMM关于同步的规定：
 - 工作内存：但我们实例化 new student，那么 age = 25 也是存储在主内存中
   - 当同时有三个线程同时访问 student中的age变量时，那么每个线程都会拷贝一份，到各自的工作内存，从而实现了变量的拷贝
 
-![image-20211026155336945](https://gitee.com/huangwei0123/image/raw/master/img/image-20211026155336945.png)
+![image-20211026155336945](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211026155336945.png)
 
 即：JMM内存模型的可见性，指的是当主内存区域中的值被某个线程写入更改后，其它线程会马上知晓更改后的值，并重新得到更改后的值。
 
@@ -285,7 +285,7 @@ public class VolatileDemo {
 
 #### 3、 为什么会出现数据丢失？
 
-![image-20211026173245341](https://gitee.com/huangwei0123/image/raw/master/img/image-20211026173245341.png)
+![image-20211026173245341](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211026173245341.png)
 
 各自线程在写入主内存的时候，出现了数据的丢失，而引起的数值缺失的问题
 
@@ -705,7 +705,7 @@ Volatile实现禁止指令重排优化，从而避免了多线程环境下程序
 
 由于编译器和处理器都能执行指令重排的优化，如果在指令间插入一条Memory Barrier则会告诉编译器和CPU，不管什么指令都不能和这条Memory Barrier指令重排序，也就是说 **`通过插入内存屏障禁止在内存屏障前后的指令执行重排序优化`**。 内存屏障另外一个作用是刷新出各种CPU的缓存数，因此任何CPU上的线程都能读取到这些数据的最新版本。
 
-![image-20211027100208273](https://gitee.com/huangwei0123/image/raw/master/img/image-20211027100208273.png)
+![image-20211027100208273](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211027100208273.png)
 
 也就是过在Volatile的写 和 读的时候，加入屏障，防止出现指令重排的
 

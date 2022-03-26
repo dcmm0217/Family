@@ -63,7 +63,7 @@ jinfo  [ options ] pid
 
 说明：java 进程ID 必须要加上
 
-![image-20220322224149867](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322224149867.png)
+![image-20220322224149867](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220322224149867.png)
 
 ```
 jinfo -flags PID  查看曾经赋过值的一些参数
@@ -82,7 +82,7 @@ jmap [option] <executable <core>
 jmap [option] [server_id@]<remote server IP or hostname>
 ```
 
-![image-20220322224310602](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322224310602.png)
+![image-20220322224310602](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220322224310602.png)
 
 一般来说，使用jmap指令生成dump文件的操作算得上是最常用的jmap命令之一,将堆中所有存活对象导出至一个文件之中。
 

@@ -18,13 +18,13 @@ MQ，Message Queue，是一种提供消息队列服务的中间件，也称为�
 
 MQ可以将系统的`超量`请求暂存其中，以便系统后期可以慢慢进行处理，从而避免了请求的丢失或系统被压垮。
 
-![image-20211122143023481](https://gitee.com/huangwei0123/image/raw/master/img/image-20211122143023481.png)
+![image-20211122143023481](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211122143023481.png)
 
 **异步解耦**
 
 上游系统对下游系统的调用若为同步调用，则会大大降低系统的吞吐量与并发度，而且系统耦合度太高。而异步调用会解决这些问题。所以两层之间若要实现同步到异步的转换，**一般性做法是，在这两层之间添加一个MQ层**
 
-![image-20211122143234983](https://gitee.com/huangwei0123/image/raw/master/img/image-20211122143234983.png)
+![image-20211122143234983](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211122143234983.png)
 
 **数据收集**
 
@@ -93,7 +93,7 @@ RocketMQ是⼀款阿⾥巴巴开源的消息中间件。2016年11⽉28⽇，阿�
 
 #### 2、RocketMQ发展历程
 
-![image-20211122154313977](https://gitee.com/huangwei0123/image/raw/master/img/image-20211122154313977.png)
+![image-20211122154313977](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211122154313977.png)
 
 2007年，阿里开始五彩石项目，Notify作为项目中交易核心消息流转系统，应运而生。Notify系统是RocketMQ的雏形。
 
@@ -121,7 +121,7 @@ RocketMQ是⼀款阿⾥巴巴开源的消息中间件。2016年11⽉28⽇，阿�
 
 #### 2、主题（Topic）
 
-![image-20211122154642925](https://gitee.com/huangwei0123/image/raw/master/img/image-20211122154642925.png)
+![image-20211122154642925](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211122154642925.png)
 
 Topic表示一类消息的集合，每个主题包含若干条消息，**每条消息只能属于一个主题，是RocketMQ进行消息订阅的基本单位**
 
@@ -149,11 +149,11 @@ tag=上海、tag=江苏、tag=浙江
 
 一个Topic的Queue中的消息只能被一个消费者组中的一个消费者消费。一个Queue中的消息不允许同一个消费者组中的多个消费者同时消费。
 
-![image-20211123110533036](https://gitee.com/huangwei0123/image/raw/master/img/image-20211123110533036.png)
+![image-20211123110533036](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211123110533036.png)
 
 在学习参考其他资料时，还会看到一个概念：分片（Sharing）。分片不同于分区，在RocketMQ中，分片指的是存放相应Topic的Broker。每个分片中会创建相应数量的分区，即Queue，每个Queue的大小都是一样的。
 
-![image-20211123110936281](https://gitee.com/huangwei0123/image/raw/master/img/image-20211123110936281.png)
+![image-20211123110936281](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211123110936281.png)
 
 #### 5、消息标识（MessageId/Key）
 
@@ -169,7 +169,7 @@ RocketMQ中每个消息拥有唯一的MessageId,且可以携带具有业务标�
 
 ### 二、系统架构
 
-![image-20211123112105936](https://gitee.com/huangwei0123/image/raw/master/img/image-20211123112105936.png)
+![image-20211123112105936](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211123112105936.png)
 
 RocketMQ架构上主要分为四部分构成：
 
@@ -195,11 +195,11 @@ RocketMQ中的消息生产者都是以生产者组（Producer Group）的形式�
 
 RocketMQ中的消息消费者都是以消费者组(Consumer Group)的形式出现的。消费者组是同一类消费者组的集合，这类Consumer消费的是同一个Topic类型的消息。消费者组使得在消费者消费方面，实现**负载均衡**（将一个Topic中的不同的Queue平均分配给同一个Consumer Group的不同的Consumer，注意，并不是将**负载均衡**）和**容错**（一个Consumer挂了，该Consumer Group中的其他Consumer可以接着消费原Consumer消费的Queue）的目标变得非常容易。
 
-![image-20211124190842217](https://gitee.com/huangwei0123/image/raw/master/img/image-20211124190842217.png)
+![image-20211124190842217](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211124190842217.png)
 
 消费者组中的Consumer的数量应该小于等于订阅Topic的Queue数量。如果超出Queue数量，则多出的Consumer将不能消费消息
 
-![image-20211124191039104](https://gitee.com/huangwei0123/image/raw/master/img/image-20211124191039104.png)
+![image-20211124191039104](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211124191039104.png)
 
 不过，一个Topic类型的消息可以被多个消费者组同时消费。
 
@@ -294,7 +294,7 @@ Broker同时也存储着消息相关的元数据，包括**消费者组消费进
 
 下图为Broker Server的功能模块示意图。
 
-![image-20211124200701786](https://gitee.com/huangwei0123/image/raw/master/img/image-20211124200701786.png)
+![image-20211124200701786](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211124200701786.png)
 
 `Remoting Module`：整个Broker的实体，负责处理来自clients端的请求。而这个Broker实体则由以下模块构成。
 
@@ -308,7 +308,7 @@ Broker同时也存储着消息相关的元数据，包括**消费者组消费进
 
 **集群部署**
 
-![image-20211124200913418](https://gitee.com/huangwei0123/image/raw/master/img/image-20211124200913418.png)
+![image-20211124200913418](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211124200913418.png)
 
 为了增强Broker性能与吞吐量，Broker一般都是以集群形式出现的。各集群节点中可能存放着相同Topic的不同Queue
 
@@ -375,15 +375,15 @@ perm用于设置对当前创建Topic的操作权限：2表示只写，4表示只
 
 系统要求是64位的，JDK要求是1.8及其以上版本的
 
-![image-20211129120046169](https://gitee.com/huangwei0123/image/raw/master/img/image-20211129120046169.png)
+![image-20211129120046169](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211129120046169.png)
 
 **下载RocketMQ安装包**
 
-![image-20211129120121396](https://gitee.com/huangwei0123/image/raw/master/img/image-20211129120121396.png)
+![image-20211129120121396](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211129120121396.png)
 
 将下载的安装包上传到Linux、解压
 
-![image-20211129120138200](https://gitee.com/huangwei0123/image/raw/master/img/image-20211129120138200.png)
+![image-20211129120138200](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211129120138200.png)
 
 #### 2、修改初始化内存
 
@@ -391,13 +391,13 @@ perm用于设置对当前创建Topic的操作权限：2表示只写，4表示只
 
 使用vim命令打开bin\runserver.sh文件
 
-![image-20211129142931044](https://gitee.com/huangwei0123/image/raw/master/img/image-20211129142931044.png)
+![image-20211129142931044](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211129142931044.png)
 
 修改runbroker.sh
 
 使用vim命令打开bin\runbroker.sh文件
 
-![image-20211129143010391](https://gitee.com/huangwei0123/image/raw/master/img/image-20211129143010391.png)
+![image-20211129143010391](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211129143010391.png)
 
 #### 3、启动
 
@@ -408,7 +408,7 @@ nohup sh bin/mqnamesrv &
 tail -f ~/logs/rocketmqlogs/namesrv.log
 ```
 
-![image-20211129143256196](https://gitee.com/huangwei0123/image/raw/master/img/image-20211129143256196.png)
+![image-20211129143256196](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211129143256196.png)
 
 启动broker
 
@@ -417,7 +417,7 @@ nohup sh bin/mqbroker -n localhost:9876 &
 tail -f ~/logs/rocketmqlogs/broker.log
 ```
 
-![image-20211129143446613](https://gitee.com/huangwei0123/image/raw/master/img/image-20211129143446613.png)
+![image-20211129143446613](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211129143446613.png)
 
 #### 4、测试
 
@@ -437,7 +437,7 @@ sh bin/tools.sh org.apache.rocketmq.example.quickstart.Consumer
 
 无论是nameserver还是borker，都是使用bin/mqshutdown命令。
 
-![image-20211129144429084](https://gitee.com/huangwei0123/image/raw/master/img/image-20211129144429084.png)
+![image-20211129144429084](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211129144429084.png)
 
 ### 四、控制台的安装与启动
 
@@ -445,7 +445,7 @@ RocketMQ有一个可视化的dashboard，通过该控制台可以直观的查看
 
 下载地址：https://github.com/apache/rocketmq-externals/releases 
 
-![image-20211130110452263](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130110452263.png)
+![image-20211130110452263](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211130110452263.png)
 
 **修改配置**
 
@@ -454,7 +454,7 @@ RocketMQ有一个可视化的dashboard，通过该控制台可以直观的查看
 - 原来的端口号为8080，修改为一个不常用的端口
 - 指定RocketMQ的NameServer的地址
 
-![image-20211130110947507](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130110947507.png)
+![image-20211130110947507](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211130110947507.png)
 
 **添加依赖**
 
@@ -493,11 +493,11 @@ RocketMQ有一个可视化的dashboard，通过该控制台可以直观的查看
 mvn clean package -Dmaven.test.skip=true
 ```
 
-![image-20211130111233214](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130111233214.png)
+![image-20211130111233214](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211130111233214.png)
 
 **启动**
 
-![image-20211130111253212](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130111253212.png)
+![image-20211130111253212](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211130111253212.png)
 
 ```
 java -jar rocketmq-console-ng-1.0.0.jar
@@ -505,15 +505,15 @@ java -jar rocketmq-console-ng-1.0.0.jar
 
 **访问**
 
-![image-20211130111336387](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130111336387.png)
+![image-20211130111336387](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211130111336387.png)
 
 ### 五、集群搭建理论
 
-![image-20211130111418709](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130111418709.png)
+![image-20211130111418709](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211130111418709.png)
 
 #### 1、数据复制与刷盘策略
 
-![image-20211130112438093](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130112438093.png)
+![image-20211130112438093](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211130112438093.png)
 
 **复制策略**
 
@@ -589,7 +589,7 @@ broker集群由多个master构成，每个master又配置多哥slave（在配置
 
 #### RAID10
 
-![image-20211130152844972](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130152844972.png)
+![image-20211130152844972](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211130152844972.png)
 
 RAID10是一个RAID1与RAID10的组合体，所以它继承了RAID0的快速和RAID1的安全
 
@@ -603,7 +603,7 @@ RAID10是一个RAID1与RAID10的组合体，所以它继承了RAID0的快速和R
 
 这里要搭建一个双主双从异步复制的Broker集群。为了方便，这里使用了两台主机来完成集群的搭建。
 
-![image-20211130154042449](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130154042449.png)
+![image-20211130154042449](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211130154042449.png)
 
 2、克隆生成rocketmqOS1
 
@@ -613,25 +613,25 @@ RAID10是一个RAID1与RAID10的组合体，所以它继承了RAID0的快速和R
 
 要修改的配置文件在rocketMQ解压目录的conf/2m-2s-async目录中
 
-![image-20211130154154465](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130154154465.png)
+![image-20211130154154465](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211130154154465.png)
 
 **修改broker-a.properties**
 
 将该配置文件内容修改如下：
 
-![image-20211130154407261](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130154407261.png)
+![image-20211130154407261](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211130154407261.png)
 
 **修改broker-b-s.properties**
 
 将该配置文件内容修改为如下：
 
-![image-20211130154621990](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130154621990.png)
+![image-20211130154621990](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211130154621990.png)
 
 其他配置
 
 除了以上配置外，这些配置文件中还可以设置其他属性
 
-![image-20211130155202290](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130155202290.png)
+![image-20211130155202290](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211130155202290.png)
 
 **4、克隆生成rocketmqOS2**
 
@@ -660,7 +660,7 @@ namesrvAddr=192.168.59.164:9876;192.168.59.165:9876
 
 将该配置文件内容修改为如下：
 
-![image-20211130155504685](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130155504685.png)
+![image-20211130155504685](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211130155504685.png)
 
 6、启动服务器
 
@@ -711,7 +711,7 @@ tail -f ~/logs/rocketmqlogs/broker.log
 
 使用vim命令打开tools.sh文件，并在JAVA_OPT配置的—Djava.ext.dirs这一行后面添加ext的路径
 
-![image-20211130160259044](https://gitee.com/huangwei0123/image/raw/master/img/image-20211130160259044.png)
+![image-20211130160259044](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211130160259044.png)
 
 **运行mqadmin**
 
@@ -767,7 +767,7 @@ Producer可以将消息写入到某Broker中的某Queue中，其经历了如下�
 
 RocketMQ中的消息存储在本地文件系统中，这些相关文件默认在当前用户主目录里下的store目录中。
 
-![image-20211201085752355](https://gitee.com/huangwei0123/image/raw/master/img/image-20211201085752355.png)
+![image-20211201085752355](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211201085752355.png)
 
 abort：该文件在Broker启动后会自动创建，正常关闭Broker，该文件会自动消失。若在没有启动
 
@@ -809,7 +809,7 @@ commitlog目录存放着很多得到mappedFile文件，当前Borker中得所有�
 
 **消息单元**
 
-![image-20211208220330020](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208220330020.png)
+![image-20211208220330020](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211208220330020.png)
 
 mappedFile文件内容由一个个的`消息单元`构成，每个消息单元中包含消息总长度MsgLen、消息的物理位置physicalOffset、消息内容Body、消息体查长度BodyLenth、消息主题Topic、Topic长度TopicLenth、消息生产者BornHost、消息发送时间戳BornTimestamp、消息所在队列QueueId、消息在Queue中存储的偏移量QueueOffset等近20余项相关属性
 
@@ -823,11 +823,11 @@ mappedFile文件内容由一个个的`消息单元`构成，每个消息单元�
 
 #### 2、consumequeue
 
-![image-20211208220941089](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208220941089.png)
+![image-20211208220941089](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211208220941089.png)
 
 **目录与文件**
 
-![image-20211208221025397](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208221025397.png)
+![image-20211208221025397](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211208221025397.png)
 
 为了提高效率，会为每个Topic在~/store/consumequeue中创建一个目录，目录名为Topic名称。在该Topic目录下，会再为每个该Topic的Queue建立一个目录，目录名为queueId。每个目录中存放着若干consumequeue文件，consumequeue文件是commitlog的索引文件，可以根据consumequeue定位到具
 体的消息。
@@ -836,7 +836,7 @@ consumequeue文件名也由20位数字构成，表示当前文件的第一个索
 
 **索引条目**
 
-![image-20211208221243607](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208221243607.png)
+![image-20211208221243607](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211208221243607.png)
 
 每个consumequeue文件可以包含30w个索引条目，每个索引条目包含了三个消息重要属性：消息在mappedFile文件中的偏移量CommitLog Offset、消息长度、消息Tag的hashcode值。这三个属性占20个字节，所以每个文件的大小是固定的30w * 20字节
 
@@ -844,7 +844,7 @@ consumequeue文件名也由20位数字构成，表示当前文件的第一个索
 
 #### 3、对文件的读写
 
-![image-20211208221338145](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208221338145.png)
+![image-20211208221338145](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211208221338145.png)
 
 **消息写入**
 
@@ -923,11 +923,11 @@ RocketMQ中commitlog目录与consumequeue的结合就类似于kafka中partition�
 
 每个Broker中会包含一组indexFile，每个indexFile都是以一个`时间戳`命名的（这个indexFile被创建时的时间戳）。每个indexFile文件由三部分构成：indexHeader，slots槽位，indexes索引数据。每个indexFile文件中包含500w个slot槽。而每个slot槽又可能会挂载很多的index索引单元。
 
-![image-20211208224544956](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208224544956.png)
+![image-20211208224544956](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211208224544956.png)
 
 indexHeader固定40个字节，其中存放着如下数据：
 
-![image-20211208224558557](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208224558557.png)
+![image-20211208224558557](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211208224558557.png)
 
 - beginTimestamp：该indexFile中第一条消息的存储时间
 - endTimestamp：该indexFile中最后一条消息存储时间
@@ -938,7 +938,7 @@ indexHeader固定40个字节，其中存放着如下数据：
 
 indexFile中最复杂的是Slots与Indexes间的关系。在实际存储时，Indexes是在Slots后面的，但为了便于理解，将它们的关系展示为如下形式：
 
-![image-20211208224809208](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208224809208.png)
+![image-20211208224809208](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211208224809208.png)
 
 **key的hash值 % 500w的结果即为slot槽位**，然后将该slot值修改为该index索引单元的indexNo，根据这个indexNo可以计算出该index单元在indexFile中的位置。
 
@@ -950,7 +950,7 @@ indexFile中最复杂的是Slots与Indexes间的关系。在实际存储时，In
 
 index索引单元默写20个字节，其中存放着以下四个属性：
 
-![image-20211208225018596](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208225018596.png)
+![image-20211208225018596](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211208225018596.png)
 
 - keyHash：消息中指定的业务key的hash值
 - phyOffset：当前key对应的消息在commitlog中的偏移量commitlog offset
@@ -994,7 +994,7 @@ indexFile文件是何时创建的？其创建的条件（时机）有两个：
 
 具体查询流程如下
 
-![image-20211208230210017](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208230210017.png)
+![image-20211208230210017](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211208230210017.png)
 
 ### 四、消息的消费
 
@@ -1035,13 +1035,13 @@ Consumer主动从Broker中拉取消息，主动权由Consumer控制，一旦获�
 
 **广播消费**
 
-![image-20211208232009183](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208232009183.png)
+![image-20211208232009183](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211208232009183.png)
 
 广播消费模式下，相同Consumer Group组每个Consumer实例都接收同一个Topic的全量消息，即每条消息都会被发送到Consumer Group中的`每个`Consumer
 
 **集群消费**
 
-![image-20211208232632798](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208232632798.png)
+![image-20211208232632798](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211208232632798.png)
 
 集群消费模式下，相同Consumer Group的每个Consumer实例`平均分摊`同一个Topic下的消息，即每条消息只会被发送到Consumer Group中的`某个`Consumer
 
@@ -1050,7 +1050,7 @@ Consumer主动从Broker中拉取消息，主动权由Consumer控制，一旦获�
 - 广播模式：消费进度保存在Consumer端，因为广播模式下consumer group中每个consumer都会消费所有消息，但他们的消费进度是不同的。所以consumer各自保存各自的消费进度。
 - 集群模式：消费进度保存在broker中，consumer group中的所有consumer共同消费一个Topic中的消息，**同一条消息只会被消费一次，消费进度会参与到了消费的负载均衡中，故消费进度是需要共享的**，下图是broker中存放的各个Topic的各个Queue的消费进度。
 
-![image-20211208233350020](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208233350020.png)
+![image-20211208233350020](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211208233350020.png)
 
 #### 3、Rebalance机制
 
@@ -1060,7 +1060,7 @@ Rebalance机制讨论的前提是：集群消费
 
 Rebalance再均衡，指的是，**将一个Topic下的多个Queue在同一个Consumer Group中的多个Consumer间进行重新分配的过程。**
 
-![image-20211208233710437](https://gitee.com/huangwei0123/image/raw/master/img/image-20211208233710437.png)
+![image-20211208233710437](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211208233710437.png)
 
 **Rebalance机制的本意是为了提升消息的`并行消费能力`。**
 
@@ -1140,7 +1140,7 @@ Consumer实例在接收到通知后会采用`Queue分配算法`自己获取到�
 
 **平均分配策略**
 
-![image-20211209233253356](https://gitee.com/huangwei0123/image/raw/master/img/image-20211209233253356.png)
+![image-20211209233253356](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211209233253356.png)
 
 该算法是要根据 `avg = QueueCout / ConsumerCount`的鸡算结果进行分配的。如果能够整除，则按顺序将avg个Queue逐个分配Consumer；如果不能整除，则将多余的Queue按照Consumer顺序逐个分配。
 
@@ -1148,7 +1148,7 @@ Consumer实例在接收到通知后会采用`Queue分配算法`自己获取到�
 
 **环形平均策略**
 
-![image-20211209233519319](https://gitee.com/huangwei0123/image/raw/master/img/image-20211209233519319.png)
+![image-20211209233519319](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211209233519319.png)
 
 环形平均算法是指，根据消费者的顺序，依次在由queue队列组成的环形图中逐个分配。
 
@@ -1156,7 +1156,7 @@ Consumer实例在接收到通知后会采用`Queue分配算法`自己获取到�
 
 **一致性hash策略**
 
-![image-20211209233639096](https://gitee.com/huangwei0123/image/raw/master/img/image-20211209233639096.png)
+![image-20211209233639096](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211209233639096.png)
 
 该算法会将Consumer的hash值作为Node节点存放到hash环上，然后将queue的hash值也放到hash环上，通过`顺时针`方向，距离queue最近的那个consumer就是该queue要分配的consumer。
 
@@ -1164,7 +1164,7 @@ Consumer实例在接收到通知后会采用`Queue分配算法`自己获取到�
 
 **同机房策略**
 
-![image-20211209233846198](https://gitee.com/huangwei0123/image/raw/master/img/image-20211209233846198.png)
+![image-20211209233846198](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211209233846198.png)
 
 该算法会**根据queue的部署机房位置和consumer的位置**，过滤出**当前consumer相同机房的queue**。然后按照平均分配策略或环形平均策略对同机房queue进行分配。如果没有同机房的queue，则按照平均分配策略或环形平均策略对所有queue进行分配。
 
@@ -1180,9 +1180,9 @@ Consumer实例在接收到通知后会采用`Queue分配算法`自己获取到�
 
 **其可以有效减少由于消费者组扩容或缩容所带来的大量的Rebalance**
 
-![image-20211210222644161](https://gitee.com/huangwei0123/image/raw/master/img/image-20211210222644161.png)
+![image-20211210222644161](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211210222644161.png)
 
-![image-20211210222720021](https://gitee.com/huangwei0123/image/raw/master/img/image-20211210222720021.png)
+![image-20211210222720021](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211210222720021.png)
 
 **一致性hash算法应用场景：**
 
@@ -1212,13 +1212,13 @@ Consumer在消费完消息后会向其`消费进度记录器`提交其消费信�
 
 多个消费者组订阅了多个Topic，并且对每个消费者组里的多个消费者实例的订阅关系保持了一致。
 
-![image-20211210223403031](https://gitee.com/huangwei0123/image/raw/master/img/image-20211210223403031.png)
+![image-20211210223403031](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211210223403031.png)
 
 #### 2、错误订阅关系
 
 一个消费者组订阅了多个Topic，但是该消费者组里的多个Consumer实例订阅关系并没有保持一致。
 
-![image-20211210223548119](https://gitee.com/huangwei0123/image/raw/master/img/image-20211210223548119.png)
+![image-20211210223548119](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211210223548119.png)
 
 **订阅了不同Topic**
 
@@ -1381,7 +1381,7 @@ Broker启动时会加载这个文件，并写入到一个双层Map（ConsumerOff
 
 这个枚举类型为ConsumerFromWhere
 
-![image-20211210230333239](https://gitee.com/huangwei0123/image/raw/master/img/image-20211210230333239.png)
+![image-20211210230333239](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211210230333239.png)
 
 ```
 CONSUME_FROM_LAST_OFFSET：从queue的当前最后一条消息开始消费
@@ -1396,7 +1396,7 @@ consumer.setConsumeTimestamp(“20210701080000”) yyyyMMddHHmmss
 
 #### 4、重试队列
 
-![image-20211210230728497](https://gitee.com/huangwei0123/image/raw/master/img/image-20211210230728497.png)
+![image-20211210230728497](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211210230728497.png)
 
 当rocketMQ对消息的消费出现异常时，**会将发生异常的消息的offset提交到Broker中的重试队列**。系统发生消息消费异常时会为当前的`topic@group`创建一个**重试队列**，该队列以`%retry%开透`，到达重试时间后开始进行消费重试。
 
@@ -1512,7 +1512,7 @@ consumer.registerMessageListener(new MessageListenerConcurrently() {
 
 #### 2、产生原因分析
 
-![image-20211213065045963](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213065045963.png)
+![image-20211213065045963](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211213065045963.png)
 
 Consumer使用长轮询Pull模式消费消息时，分为以下两个阶段：
 
@@ -1636,19 +1636,19 @@ Producer对于消息的发送方式也有多种选择，不同的方式会产生
 
 同步发送消息是指，Producer发出一条消息后，会在收到MQ返回的ACK之后才发下一条消息。该方式的消息可靠性最高，但是消息发送效率太低。
 
-![image-20211213090805111](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213090805111.png)
+![image-20211213090805111](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211213090805111.png)
 
 **异步发送消息**
 
 异步发送消息是指，Producer发出消息后无需等待MQ返回ACK，直接发送下一条消息。该方式的消息可靠性可以得到保障，消息发送效率也可以。
 
-![image-20211213090953793](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213090953793.png)
+![image-20211213090953793](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211213090953793.png)
 
 **单向发送消息**
 
 单向发送消息是指，Producer仅负责发送消息，不等待、不处理MQ的ACK。该发送方式时MQ也不返回ACK。该方式的消息发送效率最高，但消息可靠性较差。
 
-![image-20211213091121628](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213091121628.png)
+![image-20211213091121628](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211213091121628.png)
 
 #### 2、代码举例
 
@@ -1831,13 +1831,13 @@ public class SomeConsumer {
 
 消息发送到MQ中之后，Queue的选择如果采用轮询策略，消息在MQ的存储可能如下：
 
-![image-20211213153652061](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213153652061.png)
+![image-20211213153652061](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211213153652061.png)
 
-![image-20211213153706057](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213153706057.png)
+![image-20211213153706057](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211213153706057.png)
 
 这种情况下，我们希望Consumer消费消息的顺序和我们发送是一致的，然而上述MQ的投递和消费方式，我们无法保证顺序是正确的。对于顺序异常的消息，Consumer即使设置上有一定的状态容错，也不能完全处理好这么多种随机出现的组合情况。
 
-![image-20211213154118686](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213154118686.png)
+![image-20211213154118686](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211213154118686.png)
 
 基于上述的情况，可以设计如下方案：对于相同订单号的消息，通过一定的策略，将其放置在一个Queue中，然后消费者再采用一定的策略（**例如，一个线程独立处理一个queue，保证处理消息的顺序性），能够保证消费的顺序性。**
 
@@ -1847,7 +1847,7 @@ public class SomeConsumer {
 
 **全局有序**
 
-![image-20211213154724285](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213154724285.png)
+![image-20211213154724285](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211213154724285.png)
 
 当**发送和消费参与的Queue只有一个时**所保证的**有序**是整个Topic中消息的顺序，称为`全局有序`
 
@@ -1861,7 +1861,7 @@ public class SomeConsumer {
 
 **分区有序**
 
-![image-20211213155418958](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213155418958.png)
+![image-20211213155418958](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211213155418958.png)
 
 如果有多个Queue参与，其仅可保证在该Queue分区队列上的消息顺序，则成为`分区有序`
 
@@ -1937,7 +1937,7 @@ public class OrderProducer {
 
 延时消息的延迟时长`不支持随意时长`的延迟，是通过特定的延迟等级来指定的。延时等级定义在RocketMQ服务端的MessageStoreConfig类中的如下变量中：
 
-![image-20211213162431619](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213162431619.png)
+![image-20211213162431619](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211213162431619.png)
 
 即，若指定的延时等级为3，则表示延迟时长为10s，即延迟等级是从1开始计数的。
 
@@ -1949,13 +1949,13 @@ messageDelayLevel = 1s 5s 10s 30s 1m 2m 3m 4m 5m 6m 7m 8m 9m 10m 20m 30m 1h 2h 1
 
 #### 3、延时消息实现原理
 
-![image-20211213163331594](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213163331594.png)
+![image-20211213163331594](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211213163331594.png)
 
 具体实现方案是：
 
 **修改消息**
 
-![image-20211213163356815](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213163356815.png)
+![image-20211213163356815](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211213163356815.png)
 
 Producer将消息发送到Broker后，Broker会首先将消息写入到commitlog文件，然后需要将其分发到相应的consumerqueue。不过，在分发之前，系统会先判断消息中是否带有延迟等级。若没有，则直接正常分发；若有则需要经历一个复杂的过程：
 
@@ -1966,7 +1966,7 @@ Producer将消息发送到Broker后，Broker会首先将消息写入到commitlog
 >
 > 需要注意，在创建queueId目录时，并不是一次性地将所有延迟等级对应地目录全部创建完毕，而是用到哪个延迟等级创建哪个目录
 
-![image-20211213163936118](https://gitee.com/huangwei0123/image/raw/master/img/image-20211213163936118.png)
+![image-20211213163936118](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211213163936118.png)
 
 - 修改消息索引单元内容，索引单元中地Message Tag HashCode部分原本存放的是消息的Tag的Hash值。现修改为消息的`投递时间`。投递时间是指该消息被重新修改为原Topic后再次被写入到commitlog中的时间。`投递时间 = 消息存储时间 + 延时等级时间`。消息存储时间指的是消息被发送到Broker时的时间戳。
 - 将消息索引写入到SCHEDULE_TOPIC_XXXX主题下相应的consumequeue中
@@ -2006,7 +2006,7 @@ Broker内部有一个延迟消息服务类ScheduleMessageService，其会消费S
 
 我们可以使用同步消息来处理该需求场景：
 
-![image-20211214150139132](https://gitee.com/huangwei0123/image/raw/master/img/image-20211214150139132.png)
+![image-20211214150139132](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211214150139132.png)
 
 1、工行系统发送一个给B增款1w元的同步消息M给Broker
 
@@ -2024,7 +2024,7 @@ Broker内部有一个延迟消息服务类ScheduleMessageService，其会消费S
 
 解决思路是，让第1、2、3步具有原子性，要么全部成功，要么全部失败。即消息发送成功后，必须要保证扣款成功。如果扣款失败，则回滚发送成功的消息。而该思路即 使用`事务消息`。这里要使用`分布式事务`解决方案。
 
-![image-20211214155231460](https://gitee.com/huangwei0123/image/raw/master/img/image-20211214155231460.png)
+![image-20211214155231460](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211214155231460.png)
 
 使用事务消息来处理该需求场景：
 
@@ -2093,7 +2093,7 @@ Producer`回调操作`执行的结果为本地事务状态，其会发送给TC�
 
 **消息回查**
 
-![image-20211215170554726](https://gitee.com/huangwei0123/image/raw/master/img/image-20211215170554726.png)
+![image-20211215170554726](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211215170554726.png)
 
 **消息回查，即重新查询本地事务的执行状态。本例就是重新到DB中查看预扣款操作是否执行成功。**
 
@@ -2141,7 +2141,7 @@ Resource Manager ，资源管理器，管理分支事务处理的资源，与TC�
 
 #### 5、XA模式架构
 
-![image-20211215173651950](https://gitee.com/huangwei0123/image/raw/master/img/image-20211215173651950.png)
+![image-20211215173651950](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211215173651950.png)
 
 XA模式是一个典型的2PC，其执行原理如下：
 
@@ -2302,7 +2302,7 @@ public class CommonConsumer {
 
 **生产者发送消息的大小**
 
-![image-20211221164832742](https://gitee.com/huangwei0123/image/raw/master/img/image-20211221164832742.png)
+![image-20211221164832742](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211221164832742.png)
 
 生产者通过send()方法发送的Message，并不是直接将Message序列化后发送到网络上的，而是通过这个Message生成了一个字符串发送出去的。这个字符串由4部分构成：
 
@@ -2322,7 +2322,7 @@ public class CommonConsumer {
 
 **修改批量属性**
 
-![image-20211221170152384](https://gitee.com/huangwei0123/image/raw/master/img/image-20211221170152384.png)
+![image-20211221170152384](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211221170152384.png)
 
 Consumer的MessageListenerConcurrently监听接口的consumeMessage()方法的第一个参数为消息队列表，但默认情况下每次智能消费一条消息。若要使其一次可以消费多条消息，则可以通过修改Consumer的`consumeMessageBatchMaxSize`属性来指定。不过，该值不能超过32。若要修改一次拉取的最大值，则可通过修改Consumer的`pullBatchSize属性来指定`
 
@@ -2718,7 +2718,7 @@ consumer.setSuspendCurrentQueueTimeMillis(100)
 
 对于`无序消息集群消费`下的重试消费，每条消息默认最多重试16次，但每次重试的间隔时间是不同的，会逐渐变长。每次重试的时间间隔如下
 
-![image-20211229175355933](https://gitee.com/huangwei0123/image/raw/master/img/image-20211229175355933.png)
+![image-20211229175355933](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211229175355933.png)
 
 > 若一条消息在一直消费失败的前提下，将会在正常消费后的第`4小时46分`后进行第16次重试。若仍然失败，则将消息投递到`死信队列`
 
@@ -2749,7 +2749,7 @@ consumer.setSuspendCurrentQueueTimeMillis(100)
 >
 > 2）只有当出现需要进行重试消费的消息时，才会为该消费者组创建重试队列
 
-![image-20211229191034689](https://gitee.com/huangwei0123/image/raw/master/img/image-20211229191034689.png)
+![image-20211229191034689](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211229191034689.png)
 
 > 注意，消费重试的时间间隔与`延时消费`的`延时等级`十分相似，除了没有延时等级的前两个时间外，其他的时间都是相同的
 
@@ -2761,7 +2761,7 @@ Broker对于重试消息的处理是通过`延时消息`实现的。先将消息
 
 #### 5、消费重试配置方式
 
-![image-20211229191743414](https://gitee.com/huangwei0123/image/raw/master/img/image-20211229191743414.png)
+![image-20211229191743414](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211229191743414.png)
 
 集群消费方式下，消息消费失败后若希望消费重试，则需要在监听器接口的实现中明确进行如下三种方式之一的配置：
 
@@ -2773,7 +2773,7 @@ Broker对于重试消息的处理是通过`延时消息`实现的。先将消息
 
 #### 6、消费不重试配置方式
 
-![image-20211229192114750](https://gitee.com/huangwei0123/image/raw/master/img/image-20211229192114750.png)
+![image-20211229192114750](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211229192114750.png)
 
 集群消费方式下，消息消费失败后，若不希望消费重试，则在捕获到异常后同样也返回与消费成功后的相同结果，即`ConsumeConcurrentlyStatus.CONSUME_SUCCESS`，则不进行消费重试
 

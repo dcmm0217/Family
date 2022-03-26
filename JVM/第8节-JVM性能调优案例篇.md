@@ -140,9 +140,9 @@ java.lang.OutOfMemoryError: Java heap space
 
 运行程序得到 heapdump.hprof 文件以及GC日志。如下图所示：
 
-![image-20220318233715874](https://gitee.com/huangwei0123/image/raw/master/img/image-20220318233715874.png)
+![image-20220318233715874](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220318233715874.png)
 
-![image-20220318233744325](https://gitee.com/huangwei0123/image/raw/master/img/image-20220318233744325.png)
+![image-20220318233744325](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220318233744325.png)
 
 **出现原因：**
 
@@ -169,17 +169,17 @@ jvisualvm分析
 - 接下来我们使用工具打开该文件，由于我们当前设置的内存比较小，所以该文件比较小，但是正常在线上环境，该文件是比较大的，通常是以G为单位。
 - jvisualvm工具分析堆内存文件heapdump.hprof：
 
-![image-20220318234535771](https://gitee.com/huangwei0123/image/raw/master/img/image-20220318234535771.png)
+![image-20220318234535771](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220318234535771.png)
 
-![image-20220318234555789](https://gitee.com/huangwei0123/image/raw/master/img/image-20220318234555789.png)
+![image-20220318234555789](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220318234555789.png)
 
 - 通过jvisualvm工具查看，占用最多实例的类是哪个，这样就可以定位到我们的问题所在了。
 
-![image-20220318234655175](https://gitee.com/huangwei0123/image/raw/master/img/image-20220318234655175.png)
+![image-20220318234655175](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220318234655175.png)
 
 gc日志分析
 
-![image-20220318234737695](https://gitee.com/huangwei0123/image/raw/master/img/image-20220318234737695.png)
+![image-20220318234737695](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220318234737695.png)
 
 ### 2.2 案例2：元空间溢出
 
@@ -259,7 +259,7 @@ JDK8后，元空间替换了永久代，元空间使用的是本地内存
 
 1、查看监控
 
-![image-20220319001407503](https://gitee.com/huangwei0123/image/raw/master/img/image-20220319001407503.png)
+![image-20220319001407503](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220319001407503.png)
 
 2、查看GC状态
 
@@ -285,7 +285,7 @@ FGCT：老年代垃圾回收消耗时间
 GCT：垃圾回收消耗总时间
 ```
 
-![image-20220319001711436](https://gitee.com/huangwei0123/image/raw/master/img/image-20220319001711436.png)
+![image-20220319001711436](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220319001711436.png)
 
 可以看到，==FullGC 非常频繁==，而且我们的方法区，占用了59190KB/1024 = 57.8M空间，==几乎把整个方法区空间占用，所以得出的结论是方法区空间设置过小，或者存在大量由于反射生成的代理类==。
 
@@ -293,17 +293,17 @@ GCT：垃圾回收消耗总时间
 
 可以看到FullGC是由于方法区空间不足引起的，那么我们接下来分析到底是什么数据占用了大量的方法区。
 
-![image-20220319002053360](https://gitee.com/huangwei0123/image/raw/master/img/image-20220319002053360.png)
+![image-20220319002053360](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220319002053360.png)
 
 4、分析dump文件
 
 导出dump文件，使用jvisualvm工具分析之：
 
-![image-20220319002119059](https://gitee.com/huangwei0123/image/raw/master/img/image-20220319002119059.png)
+![image-20220319002119059](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220319002119059.png)
 
 对应的：
 
-![image-20220319002151315](https://gitee.com/huangwei0123/image/raw/master/img/image-20220319002151315.png)
+![image-20220319002151315](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220319002151315.png)
 
 5、解决方法
 
@@ -427,9 +427,9 @@ intern()方法
 
 jvisualvm分析：
 
-![image-20220319203330926](https://gitee.com/huangwei0123/image/raw/master/img/image-20220319203330926.png)
+![image-20220319203330926](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220319203330926.png)
 
-![image-20220319203344010](https://gitee.com/huangwei0123/image/raw/master/img/image-20220319203344010.png)
+![image-20220319203344010](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220319203344010.png)
 
 **这里就定位到了具体的线程中具体出现问题的代码的位置，进而进行优化即可。**
 
@@ -509,7 +509,7 @@ Exception in thread "main" java.lang.OutOfMemoryError: unable to create new nati
         at TestNativeOutOfMemoryError.main(TestNativeOutOfMemoryError.java:9)
 ```
 
-![image-20220319210121126](https://gitee.com/huangwei0123/image/raw/master/img/image-20220319210121126.png)
+![image-20220319210121126](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220319210121126.png)
 
 4、分析解决
 
@@ -552,7 +552,7 @@ max_map_count文件包含限制一个进程可以拥有的VMA(虚拟内存区域
 
 生产环境下，Tomcat并不建议直接在catalina.sh里配置变量，而是写在与catalina同级目录（bin目录）下的setenv.sh里。
 
-![image-20220320000318322](https://gitee.com/huangwei0123/image/raw/master/img/image-20220320000318322.png)
+![image-20220320000318322](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220320000318322.png)
 
 所以如果我们想要修改jvm的内存配置，那么我们就需要修改setenv.sh文件（默认没有，需新建一个setenv.sh）。
 
@@ -574,11 +574,11 @@ export CATALINA_OPTS="$CATALINA_OPTS -Xloggc:/opt/tomcat8.5/logs/gc.log"
 
 我们查看日志信息：
 
-![image-20220320000413966](https://gitee.com/huangwei0123/image/raw/master/img/image-20220320000413966.png)
+![image-20220320000413966](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220320000413966.png)
 
 其中存在大量的**Full GC日志**，查看一下我们Jmeter汇总报告
 
-![image-20220320000430072](https://gitee.com/huangwei0123/image/raw/master/img/image-20220320000430072.png)
+![image-20220320000430072](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220320000430072.png)
 
 吞吐量是866.9/sec
 
@@ -601,11 +601,11 @@ vi gc.log
 
 ==查找Full关键字，发现只有一处FullGC，如下图所示，我们可以看到，增大了初始化内存和最大内存之后，我们的Full次数有一个明显的减少。==
 
-![image-20220320000529626](https://gitee.com/huangwei0123/image/raw/master/img/image-20220320000529626.png)
+![image-20220320000529626](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220320000529626.png)
 
 查看Jmeter汇总报告，如下图所示：吞吐量变成了1142.1/sec，基本上是有一个明显的提升，这就说明，我们增加内存之后，服务器的性能有一个明显的提升，这就是我们本次案例的的演示
 
-![image-20220320000543576](https://gitee.com/huangwei0123/image/raw/master/img/image-20220320000543576.png)
+![image-20220320000543576](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220320000543576.png)
 
 ### 3.2 性能优化案例2：JVM优化之JIT优化
 
@@ -928,7 +928,7 @@ class Account{
 分析：
 ==依据的原则是根据Java Performance里面的推荐公式来进行设置==。
 
-![image-20220321202200424](https://gitee.com/huangwei0123/image/raw/master/img/image-20220321202200424.png)
+![image-20220321202200424](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220321202200424.png)
 
 
 
@@ -984,7 +984,7 @@ public List<People> getProduct(){
 
 jstat -gc pid 1000 1
 
-![image-20220321203847960](https://gitee.com/huangwei0123/image/raw/master/img/image-20220321203847960.png)
+![image-20220321203847960](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220321203847960.png)
 
 YGC平均耗时： 0.12s * 10000/7 = 17.14ms
 FGC未产生
@@ -1001,7 +1001,7 @@ jmap -heap pid
 查看一次FullGC之后剩余的空间大小
 ```
 
-![image-20220321204050981](https://gitee.com/huangwei0123/image/raw/master/img/image-20220321204050981.png)
+![image-20220321204050981](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220321204050981.png)
 
 可以看到存活对象占用内存空间大概13.36M，老年代的内存占用为683M左右。 按照整个堆大小是老年代（FullGC）之后的3-4倍计算的话，设置堆内存情况如下：
 
@@ -1015,7 +1015,7 @@ Xmx=14 * 3 = 42M  至  14 * 4 = 56M 之间
 
 修改完之后，我们查看一下GC状态
 
-![image-20220321204336187](https://gitee.com/huangwei0123/image/raw/master/img/image-20220321204336187.png)
+![image-20220321204336187](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220321204336187.png)
 
 请求之后
 YGC平均耗时： 0.195s * 1000/68 = 2.87ms
@@ -1024,7 +1024,7 @@ FGC未产生
 
 依然手动触发Full ，查看堆内存结构
 
-![image-20220321204429124](https://gitee.com/huangwei0123/image/raw/master/img/image-20220321204429124.png)
+![image-20220321204429124](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220321204429124.png)
 
 #### 3、结论
 
@@ -1192,13 +1192,13 @@ export CLASSPATH=$JAVA_HOME/lib/tools.jar
 
 运行结果如下：
 
-![image-20220321221320770](https://gitee.com/huangwei0123/image/raw/master/img/image-20220321221320770.png)
+![image-20220321221320770](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220321221320770.png)
 
 可以看到，程序依然处于运行状态。现在我们知道是线程死锁造成的问题。
 
 > 问题分析
 
-![image-20220321221339031](https://gitee.com/huangwei0123/image/raw/master/img/image-20220321221339031.png)
+![image-20220321221339031](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220321221339031.png)
 
 从上图可以看出来，当前占用cpu比较高的线程 ID 是1465
 
@@ -1218,17 +1218,17 @@ jstack  1456 > jstack.log
 
 结果如下：
 
-![image-20220321221432431](https://gitee.com/huangwei0123/image/raw/master/img/image-20220321221432431.png)
+![image-20220321221432431](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220321221432431.png)
 
 所有的准备工作已经完成，我们接下来分析日志中的信息，来定位问题出在哪里。
 
 打开jstack.log文件  查找一下刚刚我们转换完的16进制ID是否存在
 
-![image-20220321221456057](https://gitee.com/huangwei0123/image/raw/master/img/image-20220321221456057.png)
+![image-20220321221456057](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220321221456057.png)
 
 jstack命令生成的thread dump信息包含了JVM中所有存活的线程，里面确实是存在我们定位到的线程 ID ，在thread dump中每个线程都有一个nid，在nid=0x5b9的线程调用栈中，我们发现两个线程在互相等待对方释放资源
 
-![image-20220321221524728](https://gitee.com/huangwei0123/image/raw/master/img/image-20220321221524728.png)
+![image-20220321221524728](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220321221524728.png)
 
 到此就可以检查对应的代码是否有问题，也就定位到我们的死锁问题。
 
@@ -1287,7 +1287,7 @@ jinfo -flag ConcGCThreads pid -XX:ConcGCThreads=1
 jstat -gc pid
 ```
 
-![image-20220322221701675](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322221701675.png)
+![image-20220322221701675](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220322221701675.png)
 
 得出信息：
 
@@ -1299,7 +1299,7 @@ GCT：GC总时间是5.556s
 
 Jmeter压测之后的GC状态：
 
-![image-20220322221743001](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322221743001.png)
+![image-20220322221743001](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220322221743001.png)
 
 得出信息：
 
@@ -1326,7 +1326,7 @@ Jmeter压测结果如下：
 95%的请求响应时间为：16ms
 99%的请求响应时间为：28ms
 
-![image-20220322221829595](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322221829595.png)
+![image-20220322221829595](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220322221829595.png)
 
 > 优化之后状态
 
@@ -1344,7 +1344,7 @@ jstat -gc pid
 
 tomcat启动之后的初始化GC状态：
 
-![image-20220322221943595](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322221943595.png)
+![image-20220322221943595](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220322221943595.png)
 
 总结：
 YGC：youngGC次数是 1134 次
@@ -1353,7 +1353,7 @@ GCT：GC总时间是 5.234s
 
 Jmeter压测之后的GC状态：
 
-![image-20220322222016544](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322222016544.png)
+![image-20220322222016544](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220322222016544.png)
 
 总结：
 YGC：youngGC次数是 1347 次
@@ -1375,7 +1375,7 @@ GCT：GC总时间是 7.149 - 5.234 = 1.915s   提供了线程数，使得用户�
 95%的请求响应时间为：15ms
 99%的请求响应时间为：22ms
 
-![image-20220322222126474](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322222126474.png)
+![image-20220322222126474](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220322222126474.png)
 
 
 
@@ -1401,17 +1401,17 @@ export CATALINA_OPTS="$CATALINA_OPTS -Xloggc:/opt/tomcat8.5/logs/gc6.log"
 
 查看GC状态：
 
-![image-20220322222246990](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322222246990.png)
+![image-20220322222246990](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220322222246990.png)
 
 发生3次FullGC，可以接受
 
-![image-20220322222313339](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322222313339.png)
+![image-20220322222313339](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220322222313339.png)
 
 查看吞吐量，997.6/sec，吞吐量并没有明显变化，我们究其原因，本身UseParallelGC是并行收集器，但是我们的服务器是单核。
 
 接下来我们把服务器改为8核。
 
-![image-20220322222347131](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322222347131.png)
+![image-20220322222347131](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220322222347131.png)
 
 8核状态下的性能表现如下，吞吐量大幅提升，甚至翻了一倍，这说明我们在多核机器上面采用并行收集器对于系统的吞吐量有一个显著的效果。
 
@@ -1429,19 +1429,19 @@ export CATALINA_OPTS="$CATALINA_OPTS -Xloggc:/opt/tomcat8.5/logs/gc6.log"
 
 查看GC状态：
 
-![image-20220322222416883](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322222416883.png)
+![image-20220322222416883](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220322222416883.png)
 
 没有产生FullGC，效果较之前有提升。
 
 查看压测效果，吞吐量也是比串行收集器效果更佳，而且没有了FullGC。此次优化较为成功。
 
-![image-20220322222439260](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322222439260.png)
+![image-20220322222439260](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220322222439260.png)
 
 
 
 ### 3.7 性能优化案例7：日均百万级订单交易系统如何设置JVM参数
 
-![image-20220322222557686](https://gitee.com/huangwei0123/image/raw/master/img/image-20220322222557686.png)
+![image-20220322222557686](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220322222557686.png)
 
 第二个层面问题：如果要求响应时间控制在100ms如何实现？
 

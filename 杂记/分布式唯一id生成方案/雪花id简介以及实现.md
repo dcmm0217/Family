@@ -27,7 +27,7 @@
 
 snowflake是Twitter开源的分布式ID生成算法，结果是64bit的Long类型的ID，有着全局唯一和有序递增的特点。
 
-![image-20220307144035999](https://gitee.com/huangwei0123/image/raw/master/img/image-20220307144035999.png)
+![image-20220307144035999](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220307144035999.png)
 
 - 最高位是符号位，因为生成的 ID 总是正数，始终为0，不可用
 - 41位的时间序列，精确到毫秒级，41位的长度可以使用69年。时间位还有一个很重要的作用是可以根据时间进行排序。

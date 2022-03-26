@@ -6,7 +6,7 @@
 
 这篇文章从15个方面，分享了sql优化的一些小技巧，希望对你有所帮助。
 
-![image-20211231171331519](https://gitee.com/huangwei0123/image/raw/master/img/image-20211231171331519.png)
+![image-20211231171331519](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211231171331519.png)
 
 
 

@@ -40,7 +40,7 @@ public class ArrayListNotSafeDemo {
 
 为什么ArrayList是线程不安全的？因为在**进行写操作的时候**，方法上为了保证并发性，是**没有添加synchronized修饰**，所以并发写的时候，就会出现问题
 
-![image-20211029113951639](https://gitee.com/huangwei0123/image/raw/master/img/image-20211029113951639.png)
+![image-20211029113951639](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211029113951639.png)
 
 当我们同时启动30个线程去操作List的时候
 
@@ -62,7 +62,7 @@ public class ArrayListNotSafeDemo {
 
 这个时候出现了错误，也就是java.util.ConcurrentModificationException(并发修改异常)
 
-![image-20211029114154928](https://gitee.com/huangwei0123/image/raw/master/img/image-20211029114154928.png)
+![image-20211029114154928](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211029114154928.png)
 
 ## 2、解决方案
 
@@ -72,7 +72,7 @@ public class ArrayListNotSafeDemo {
 
 关于Vector如何实现线程安全的，而是在方法上加了锁，即synchronized
 
-![image-20211029114218745](https://gitee.com/huangwei0123/image/raw/master/img/image-20211029114218745.png)
+![image-20211029114218745](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211029114218745.png)
 
 这样就每次只能够一个线程进行操作，所以不会出现线程不安全的问题，但是因为加锁了，导致并发性急剧下降
 
@@ -136,13 +136,13 @@ public boolean add(E e) {
 
 底层还是使用CopyOnWriteArrayList进行实例化
 
-![image-20211029120508702](https://gitee.com/huangwei0123/image/raw/master/img/image-20211029120508702.png)
+![image-20211029120508702](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211029120508702.png)
 
 #### HashSet底层结构
 
 同理HashSet的底层结构就是HashMap
 
-![image-20211029120534440](https://gitee.com/huangwei0123/image/raw/master/img/image-20211029120534440.png)
+![image-20211029120534440](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20211029120534440.png)
 
 但是为什么我调用 HashSet.add()的方法，只需要传递一个元素，而HashMap是需要传递key-value键值对？
 

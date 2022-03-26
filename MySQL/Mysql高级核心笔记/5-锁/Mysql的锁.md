@@ -28,11 +28,11 @@
 
 当一个事务想对这条记录做改动时，首先会看看内存中有没有与这条记录关联的` 锁结构 `，当没有的时候就会在内存中生成一个` 锁结构 `与之关联。比如，事务 T1 要对这条记录做改动，就需要生成一个` 锁结构`与之关联：
 
-![image-20220210214405368](https://gitee.com/huangwei0123/image/raw/master/img/image-20220210214405368.png)
+![image-20220210214405368](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220210214405368.png)
 
-![image-20220210214426080](https://gitee.com/huangwei0123/image/raw/master/img/image-20220210214426080.png)
+![image-20220210214426080](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220210214426080.png)
 
-![image-20220210214435498](https://gitee.com/huangwei0123/image/raw/master/img/image-20220210214435498.png)
+![image-20220210214435498](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220210214435498.png)
 
 小结几种说法：
 
@@ -85,7 +85,7 @@
 
 锁的分类图，如下：
 
-![image-20220210224803116](https://gitee.com/huangwei0123/image/raw/master/img/image-20220210224803116.png)
+![image-20220210224803116](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220210224803116.png)
 
 #### 3.1 从数据操作的类型划分：读锁、写锁
 
@@ -329,11 +329,11 @@ InnoDB与MyISAM的最大不同有两点：一支持事务；二是采用了行�
 
 比如我们把id值为8的那条记录加一个记录锁的示意图如图所示。仅仅是锁住了id值为8的记录，对周围的数据没有影响
 
-![image-20220227013614369](https://gitee.com/huangwei0123/image/raw/master/img/image-20220227013614369.png)
+![image-20220227013614369](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220227013614369.png)
 
 举例：
 
-![image-20220227013841444](https://gitee.com/huangwei0123/image/raw/master/img/image-20220227013841444.png)
+![image-20220227013841444](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220227013841444.png)
 
 记录锁时有S锁和X锁之分的，称之为 `S型记录锁` 和 `X型记录锁` 。
 
@@ -347,7 +347,7 @@ Mysql在`可重复读`的隔离级别下是可以解决幻读问题的，解决�
 
 InnoDB提出了一种称之为`Gap Locks `的锁，官方的类型名称为：` LOCK_GAP `，我们可以简称为`gap锁` 。比如，把id值为8的那条记录加一个gap锁的示意图如下
 
-![image-20220227014558547](https://gitee.com/huangwei0123/image/raw/master/img/image-20220227014558547.png)
+![image-20220227014558547](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220227014558547.png)
 
 图中id值为8的记录加了gap锁，意味着`不允许别的事务在id值为8的记录前边的间隙插入新记录 `，其实就是id列的值(3, 8)这个区间的新记录是不允许立即插入的。
 
@@ -359,7 +359,7 @@ InnoDB提出了一种称之为`Gap Locks `的锁，官方的类型名称为：` 
 
 有时候我们既想` 锁住某条记录` ，又想 `阻止` 其他事务在该记录前边的 `间隙插入新记录` ，所以InnoDB就提出了一种称之为 `Next-Key Locks` 的锁，官方的类型名称为： `LOCK_ORDINARY` ，我们也可以简称为`next-key锁` 。`Next-Key Locks`是在存储引擎 **innodb** 、事务级别在 可重复读 的情况下使用的数据库锁，**innodb默认的锁就是Next-Key locks**
 
-![image-20220227195003792](https://gitee.com/huangwei0123/image/raw/master/img/image-20220227195003792.png)
+![image-20220227195003792](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220227195003792.png)
 
 `next-key锁`的本质就是一个`记录锁`和`间隙锁的`组合体，它既能保护好该条记录，又能阻止别的事务将新记录插入被保护记录前边的`间隙`
 
@@ -381,7 +381,7 @@ select * from student where id <=8 and id > 3 for update;
 
 ==事实上插入意向锁并不会阻止别的事务继续获取该记录上任何类型的锁。==
 
-![image-20220227200519107](https://gitee.com/huangwei0123/image/raw/master/img/image-20220227200519107.png)
+![image-20220227200519107](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220227200519107.png)
 
 ##### 3、页锁
 
@@ -412,7 +412,7 @@ update items set quantity = quantity - num where id = 1001;
 
 这样写的话，在并发量小的公司没有大的问题，但是如果在`高并发环境`下可能出现以下问题
 
-![image-20220227202445866](https://gitee.com/huangwei0123/image/raw/master/img/image-20220227202445866.png)
+![image-20220227202445866](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220227202445866.png)
 
 其中线程B此时已经下单并且减完库存，这个时候去线程A，依然去执行了step3，就造成了超卖。
 
@@ -494,7 +494,7 @@ update items set quantity = quantity - num where id = 1001 and quantity - num > 
 
 2、`悲观锁` 适合 `写操作多` 的场景，因为写的操作具有 `排它性` 。采用悲观锁的方式，**可以在数据库层面阻止其他事务对该数据的操作权限**，防止 `读 - 写 `和 `写 - 写` 的冲突
 
-![image-20220227225001072](https://gitee.com/huangwei0123/image/raw/master/img/image-20220227225001072.png)
+![image-20220227225001072](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220227225001072.png)
 
 #### 3.4 按加锁的方式划分：显示锁、隐式锁
 
@@ -593,7 +593,7 @@ Flush tables with read lock
 
 举例1:
 
-![image-20220228114703761](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228114703761.png)
+![image-20220228114703761](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220228114703761.png)
 
 举例2：
 
@@ -638,11 +638,11 @@ update account set balance = balance +100 where name ='A' #4
 
 这是一种较为`主动的死锁检测机制`，要求数据库保存`锁的信息链表`和`事务等待链表`两部分信息
 
-![image-20220228120507981](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228120507981.png)
+![image-20220228120507981](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220228120507981.png)
 
 基于这两个信息，可以绘制`wait-for graph`（等待图）
 
-![image-20220228120537283](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228120537283.png)
+![image-20220228120537283](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220228120537283.png)
 
 > 死锁检测的原理是构建一个以事务为顶点，锁为边的有向图，判断有向图是否存在环，存在即有死锁。
 
@@ -685,7 +685,7 @@ select * from user lock in share mode;
 
 Innodb存储引擎中的`锁结构`如下：
 
-![image-20220228152752577](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228152752577.png)
+![image-20220228152752577](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220228152752577.png)
 
 结构解析：
 
@@ -716,7 +716,7 @@ Innodb存储引擎中的`锁结构`如下：
 
 这是一个32位的数，被分成了`lock_mode`、`lock_type`、`rec_lock_type`三部分，如图所示
 
-![image-20220228153518475](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228153518475.png)
+![image-20220228153518475](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220228153518475.png)
 
 - 锁的模式（ lock_mode ），占用低4位，可选的值如下：
 
@@ -865,7 +865,7 @@ insert into test values(0,0,0),(5,5,5),
 
 ==案例一：唯一索引等值查询间隙锁==
 
-![image-20220228160437680](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228160437680.png)
+![image-20220228160437680](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220228160437680.png)
 
 由于表 test 中没有 id=7 的记录
 
@@ -873,7 +873,7 @@ insert into test values(0,0,0),(5,5,5),
 
 ==案例二：非唯一索引等值查询锁==
 
-![image-20220228160558992](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228160558992.png)
+![image-20220228160558992](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220228160558992.png)
 
 这里 session A 要给索引 col1 上 col1=5 的这一行加上读锁。
 
@@ -902,7 +902,7 @@ select * from tets where id>=10 and id<11 for update;
 
 这两条查语句肯定是等价的，但是它们的加锁规则不太一样
 
-![image-20220228161239224](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228161239224.png)
+![image-20220228161239224](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220228161239224.png)
 
 1. 开始执行的时候，要找到第一个 id=10 的行，因此本该是 next-key lock(5,10] 。 根据优化 1 ，主键id 上的等值条件，退化成行锁，只加了 id=10 这一行的行锁。
 
@@ -918,7 +918,7 @@ session A 这时候锁的范围就是主键索引上，行锁 id=10 和 next-key
 
 这两条查语句肯定是等价的，但是它们的加锁规则不太一样
 
-![image-20220228161433288](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228161433288.png)
+![image-20220228161433288](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220228161433288.png)
 
 在第一次用 col1=10 定位记录的时候，索引 c 上加了 (5,10] 这个 next-key lock 后，由于索引 col1 是非唯一索引，没有优化规则，也就是 说不会蜕变为行锁，因此最终 sesion A 加的锁是，索引 c 上的 (5,10] 和(10,15] 这两个 next-keylock 
 
@@ -926,7 +926,7 @@ session A 这时候锁的范围就是主键索引上，行锁 id=10 和 next-key
 
 ==案例五：唯一索引范围查询锁 bug==
 
-![image-20220228161540619](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228161540619.png)
+![image-20220228161540619](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220228161540619.png)
 
 session A 是一个范围查询，按照原则 1 的话，应该是索引 id 上只加 (10,15] 这个 next-key lock ，并且因为 id 是唯一键，所以循环判断到 id=15 这一行就应该停止了。
 
@@ -940,7 +940,7 @@ session A 是一个范围查询，按照原则 1 的话，应该是索引 id 上
 
 但是它们的主键值 id 是不同的（分别是 10 和 30 ），因此这两个c=10 的记录之间，也是有间隙的
 
-![image-20220228162243155](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228162243155.png)
+![image-20220228162243155](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220228162243155.png)
 
 这次我们用 delete 语句来验证。注意， delete 语句加锁的逻辑，其实跟 select ... for update 是类似的，也就是我在文章开始总结的两个 “ 原则 ” 、两个 “ 优化 ” 和一个 “bug” 。
 
@@ -948,7 +948,7 @@ session A 是一个范围查询，按照原则 1 的话，应该是索引 id 上
 
 由于c是普通索引，所以继续向右查找，直到碰到 (col1=15,id=15) 这一行循环才结束。根据优化 2 ，这是一个等值查询，向右查找到了不满足条件的行，所以会退化成 (col1=10,id=10) 到 (col1=15,id=15) 的间隙锁
 
-![image-20220228162552246](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228162552246.png)
+![image-20220228162552246](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220228162552246.png)
 
 这个 delete 语句在索引 c 上的加锁范围，就是上面图中蓝色区域覆盖的部分。这个蓝色区域左右两边都是虚线，表示开区间，即 (col1=5,id=5) 和 (col1=15,id=15) 这两行上都没有锁
 
@@ -956,13 +956,13 @@ session A 是一个范围查询，按照原则 1 的话，应该是索引 id 上
 
 例子 6 也有一个对照案例，场景如下所示：
 
-![image-20220228163353931](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228163353931.png)
+![image-20220228163353931](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220228163353931.png)
 
 session A 的 delete 语句加了 limit 2 。你知道表 t 里 c=10 的记录其实只有两条，因此加不加 limit 2 ，删除的效果都是一样的。但是加锁效果却不一样
 
 这是因为，案例七里的 delete 语句明确加了 limit 2 的限制，因此在遍历到 (col1=10, id=30) 这一行之后，满足条件的语句已经有两条，循环就结束了。因此，索引 col1 上的加锁范围就变成了从（ col1=5,id=5)到（ col1=10,id=30) 这个前开后闭区间，如下图所示：
 
-![image-20220228163420281](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228163420281.png)
+![image-20220228163420281](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220228163420281.png)
 
 这个例子对我们实践的指导意义就是， 在删除数据的时候尽量加 limit 。
 
@@ -970,7 +970,7 @@ session A 的 delete 语句加了 limit 2 。你知道表 t 里 c=10 的记录�
 
 ==案例八：一个死锁的==
 
-![image-20220228163445294](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228163445294.png)
+![image-20220228163445294](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220228163445294.png)
 
 1. session A 启动事务后执行查询语句加 lock in share mode ，在索引 col1 上加了 next-keylock(5,10] 和间隙锁 (10,15) （索引向右遍历退化为间隙锁）；
 2. session B 的 update 语句也要在索引 c 上加 next-key lock(5,10] ，进入锁等待； 实际上分成了两步，先是加 (5,10) 的间隙锁，加锁成功；然后加 col1=10 的行锁，因为sessionA上已经给这行加上了读锁，此时申请死锁时会被阻塞
@@ -987,7 +987,7 @@ select * from test where id>9 and id<12 order by id desc for update;
 
 下图为这个表的索引id的示意图。
 
-![image-20220228165740369](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228165740369.png)
+![image-20220228165740369](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220228165740369.png)
 
 1. 首先这个查询语句的语义是 order by id desc ，要拿到满足条件的所有行，优化器必须先找到 “ 第一个 id<12 的值 ” 。
 2. 这个过程是通过索引树的搜索过程得到的，在引擎内部，其实是要找到 id=12 的这个值，只是最终没找到，但找到了 (10,15) 这个间隙。（ id=15 不满足条件，所以 next-key lock 退化为了间隙锁 (10,15)。）
@@ -996,7 +996,7 @@ select * from test where id>9 and id<12 order by id desc for update;
 
 ==案例十：order by索引排序的间隙锁2==
 
-![image-20220228165844004](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228165844004.png)
+![image-20220228165844004](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220228165844004.png)
 
 1. 由于是 order by col1 desc ，第一个要定位的是索引 col1 上 “ 最右边的 ”col1=20 的行。这是一个非唯一索引的等值查询：
 
@@ -1010,7 +1010,7 @@ select * from test where id>9 and id<12 order by id desc for update;
 
 ==案例十一：update修改数据的例子-先插入后删除==
 
-![image-20220228165925194](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228165925194.png)
+![image-20220228165925194](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220228165925194.png)
 
 注意：根据 col1>5 查到的第一个记录是 col1=10 ，因此不会加 (0,5] 这个 next-key lock 。
 
@@ -1023,7 +1023,7 @@ session A 的加锁范围是索引 col1 上的 (5,10] 、 (10,15] 、 (15,20] �
 
 通过这个操作， session A 的加锁范围变成了图 7 所示的样子：
 
-![image-20220228165957283](https://gitee.com/huangwei0123/image/raw/master/img/image-20220228165957283.png)
+![image-20220228165957283](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220228165957283.png)
 
 好，接下来 session B 要执行 update t set col1 = 5 where col1 = 1 这个语句了，一样地可以拆成两步：
 
