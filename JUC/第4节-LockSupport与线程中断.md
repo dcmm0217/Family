@@ -623,3 +623,50 @@ public class T1
 park多次，unpark多次，还是只能解锁一个，只能颁发一个通行证。
 
 ![image-20220410234806554](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220410234806554.png)
+
+**不能说加/解锁，应该是 等待2次，只唤醒1次。还是继续运行。**
+
+而且一个线程只能颁发一个通行证，如果需要多次唤醒，你可以开多个线程去唤醒即可。
+
+```java
+/**
+ * @description: LockSupport的API调用
+ * @author：huangw
+ * @date: 2022/4/10
+ */
+public class Test1 {
+    public static void main(String[] args) {
+
+        Thread t1 = new Thread(() -> {
+            System.out.println(Thread.currentThread().getName() + "come in");
+            LockSupport.park();
+            LockSupport.park();
+            System.out.println(Thread.currentThread().getName() + "被唤醒");
+        }, "t1");
+        t1.start();
+
+        Thread t3 = new Thread(() -> {
+            System.out.println(Thread.currentThread().getName() + "come in");
+            LockSupport.park();
+            System.out.println(Thread.currentThread().getName() + "被唤醒");
+        }, "t3");
+        t3.start();
+
+
+        new Thread(()->{
+            LockSupport.unpark(t1);
+            LockSupport.unpark(t3);
+            System.out.println(Thread.currentThread().getName() + "去通知");
+        },"t2").start();
+
+        new Thread(()->{
+            LockSupport.unpark(t1);
+            System.out.println(Thread.currentThread().getName() + "去通知");
+        },"t3").start();
+
+    }
+}
+```
+
+![image-20220410235157563](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220410235157563.png)
+
