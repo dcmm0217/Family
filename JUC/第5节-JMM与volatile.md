@@ -172,3 +172,4 @@ JMM定义了线程和主内存之间的抽象关系
 把getter/setter方法都定义为synchronized方法
 
 把value定义为volatile变量，由于setter方法对value的修改不依赖value的原值，满足volatile关键字使用场景
+
