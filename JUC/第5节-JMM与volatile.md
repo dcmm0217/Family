@@ -197,7 +197,7 @@ JMM定义了线程和主内存之间的抽象关系
 
 > 什么是内存屏障？
 
-内存屏障（也称内存栅栏，内存栅障，屏障指令等，是一类同步屏障指令，是CPU或编译器在对内存随机访问的操作中的一个同步点，==使得此点之前的所有读写操作都执行后才可以开始执行此点之后的操作==），避免代码重排序。内存屏障其实就是一种JVM指令，Java内存模型的重排规则会要求Java编译器在生成JVM指令时插入特定的内存屏障指令，==通过这些内存屏障指令，volatile实现了Java内存模型中的可见性和有序性，但volatile无法保证原子性==。
+内存屏障（也称内存栅栏，内存栅障，屏障指令等，是一类同步屏障指令，是CPU或编译器在对内存随机访问的操作中的一个同步点，==使得此点之前的所有读写操作都执行后才可以开始执行此点之后的操作==），避免代码重排序。**内存屏障其实就是一种JVM指令**，Java内存模型的重排规则会要求Java编译器在生成JVM指令时插入特定的内存屏障指令，==通过这些内存屏障指令，volatile实现了Java内存模型中的可见性和有序性，但volatile无法保证原子性==。
 
 **内存屏障之前的所有写操作都要回写到主内存，**
 
@@ -463,8 +463,292 @@ JVM的字节码，i++分成三步，间隙期不同步非原子操作(i++)
 
 ##### 指令禁重排
 
+> 什么是重排序？
+
+重排序是指编译器和处理器为了优化程序性能而对指令序列进行重新排序的一种手段，有时候会改变程序语句的先后顺序，不存在数据依赖关系，可以重排序；
+
+**存在数据依赖关系，禁止重排序**
+
+但重排后的指令绝对不能改变原有的串行语义！这点在并发设计中必须要重点考虑！
+
+> 重排序的分类和执行流程
+
+![image-20220417230620197](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220417230620197.png)
+
+- 编译器优化的重排序： 编译器在不改变单线程串行语义的前提下，可以重新调整指令的执行顺序
+- 指令级并行的重排序： 处理器使用指令级并行技术来讲多条指令重叠执行，若不存在数据依赖性，处理器可以改变语句对应机器指令的执行顺序
+- 内存系统的重排序： 由于处理器使用缓存和读/写缓冲区，这使得加载和存储操作看上去可能是乱序执行
+
+**数据依赖性：若两个操作访问同一变量，且这两个操作中有一个为写操作，此时两操作间就存在数据依赖性。**
+
+案例 ：
+
+不存在数据依赖关系，可以重排序===> 重排序OK 。
+
+![image-20220417230800876](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220417230800876.png)
+
+存在数据依赖关系，禁止重排序===> 重排序发生，会导致程序运行结果不同。
+
+编译器和处理器在重排序时，会遵守数据依赖性，不会改变存在依赖关系的两个操作的执行,但不同处理器和不同线程之间的数据性不会被编译器和处理器考虑，其只会作用于单处理器和单线程环境，下面三种情况，只要重排序两个操作的执行顺序，程序的执行结果就会被改变。
+
+![image-20220417230834750](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220417230834750.png)
+
+> volatile的底层实现是通过内存屏障，2次复习下
+
+1、volatile有关的禁止指令重排的行为
+
+![image-20220417231107684](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220417231107684.png)
+
+当第一个操作为`volatile读`时，不论第二个操作是什么，都不能重排序。这个操作保证了volatile读之后的操作不会被重排到volatile读之前。
+
+当第二个操作为`volatile写`时，不论第一个操作是什么，都不能重排序。这个操作保证了volatile写之前的操作不会被重排到volatile写之后。
+
+当第一个操作为`volatile写`时，第二个操作为volatile读时，不能重排。
+
+2、四大屏障的插入情况
+
+- 在每一个volatile写操作前面加入一个StoreStore屏障，StoreStore屏障可以保证在volatile写之前，其前面的所有普通写操作都已经刷新到主内存中
+- 在每一个volatile写操作后面插入一个StoreLoad屏障，StoreLoad屏障的作用是避免volatile写与后面可能有的volatile读/写操作重排序
+- 在每一个volatile读操作后插入一个LoadLoad屏障，LoadLoad屏障用来禁止处理器把上面的volatile读与下面的普通读重排序
+- 在每一个volatile读操作后插入一个LoadStore屏障，LoadStore屏障用来禁止处理器把上面的volatile读与下面的普通写重排序
+
+3、案例说明
+
+```java
+//模拟一个单线程，什么顺序读？什么顺序写？
+public class VolatileTest {
+    int i = 0;
+    volatile boolean flag = false;
+    public void write(){
+        i = 2;
+        flag = true;
+    }
+    public void read(){
+        if(flag){
+            System.out.println("---i = " + i);
+        }
+    }
+}
+```
+
+![image-20220417232042672](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220417232042672.png)
+
 
 
 #### 6.4 如何正确使用volatile
 
+1、单一赋值可以，but含复合运算赋值不可以（i++之类） 
+
+```java
+volatile int a =10;
+volatile boolean flag = false;
+```
+
+2、状态标识，判断业务是否结束
+
+```java
+/**
+ *
+ * 使用：作为一个布尔状态标志，用于指示发生了一个重要的一次性事件，例如完成初始化或任务结束
+ * 理由：状态标志并不依赖于程序内任何其他状态，且通常只有一种状态转换
+ * 例子：判断业务是否结束
+ */
+public class UseVolatileDemo
+{
+    private volatile static boolean flag = true;
+
+    public static void main(String[] args)
+    {
+        new Thread(() -> {
+            while(flag) {
+                //do something......
+            }
+        },"t1").start();
+
+        //暂停几秒钟线程
+        try { TimeUnit.SECONDS.sleep(2L); } catch (InterruptedException e) { e.printStackTrace(); }
+
+        new Thread(() -> {
+            flag = false;
+        },"t2").start();
+    }
+}
+```
+
+3、开销较低的读，写锁策略
+
+```java
+public class UseVolatileDemo
+{
+    /**
+     * 使用：当读远多于写，结合使用内部锁和 volatile 变量来减少同步的开销
+     * 理由：利用volatile保证读取操作的可见性；利用synchronized保证复合操作的原子性
+     */
+    public class Counter
+    {
+        private volatile int value;
+
+        public int getValue()
+        {
+            return value;   //利用volatile保证读取操作的可见性
+              }
+        public synchronized int increment()
+        {
+            return value++; //利用synchronized保证复合操作的原子性
+               }
+    }
+}
+```
+
+4、DCL双端锁的发布
+
+问题：
+
+```java
+public class SafeDoubleCheckSingleton
+{
+    private static SafeDoubleCheckSingleton singleton;
+    //私有化构造方法
+    private SafeDoubleCheckSingleton(){
+    }
+    //双重锁设计
+    public static SafeDoubleCheckSingleton getInstance(){
+        if (singleton == null){
+            //1.多线程并发创建对象时，会通过加锁保证只有一个线程能创建对象
+            synchronized (SafeDoubleCheckSingleton.class){
+                if (singleton == null){
+                    //隐患：多线程环境下，由于重排序，该对象可能还未完成初始化就被其他线程读取
+                    singleton = new SafeDoubleCheckSingleton();
+                }
+            }
+        }
+        //2.对象创建完毕，执行getInstance()将不需要获取锁，直接返回创建对象
+        return singleton;
+    }
+}
+```
+
+单线程看问题代码
+
+**单线程环境下(或者说正常情况下)，在"问题代码处"，会执行如下操作，保证能获取到已完成初始化的实例**
+
+![image-20220417232554352](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220417232554352.png)
+
+多线程看问题代码
+
+隐患：多线程环境下，在"问题代码处"，会执行如下操作，由于重排序导致2,3乱序，后果就是其他线程得到的是null而不是完成初始化的对象
+
+![image-20220417233527496](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220417233527496.png)
+
+解决01：加volatile修饰
+
+```java
+public class SafeDoubleCheckSingleton
+{
+    //通过volatile声明，实现线程安全的延迟初始化。
+    private volatile static SafeDoubleCheckSingleton singleton;
+    //私有化构造方法
+    private SafeDoubleCheckSingleton(){
+    }
+    //双重锁设计
+    public static SafeDoubleCheckSingleton getInstance(){
+        if (singleton == null){
+            //1.多线程并发创建对象时，会通过加锁保证只有一个线程能创建对象
+            synchronized (SafeDoubleCheckSingleton.class){
+                if (singleton == null){
+                    //隐患：多线程环境下，由于重排序，该对象可能还未完成初始化就被其他线程读取
+                                      //原理:利用volatile，禁止 "初始化对象"(2) 和 "设置singleton指向内存空间"(3) 的重排序
+                    singleton = new SafeDoubleCheckSingleton();
+                }
+            }
+        }
+        //2.对象创建完毕，执行getInstance()将不需要获取锁，直接返回创建对象
+        return singleton;
+    }
+}
+```
+
+面试题，反周志明老师的案例，你还有不加volatile的方法吗？
+
+解决02：采用静态内部类的方式实现
+
+```java
+//现在比较好的做法就是采用静态内部内的方式实现
+ 
+public class SingletonDemo
+{
+    private SingletonDemo() { }
+
+    private static class SingletonDemoHandler
+    {
+        private static SingletonDemo instance = new SingletonDemo();
+    }
+
+    public static SingletonDemo getInstance()
+    {
+        return SingletonDemoHandler.instance;
+    }
+}
+```
+
 #### 6.5 总结
+
+1、内存屏障是什么?
+
+内存屏障：是一种 屏障指令，它使得CPU或编译器 对 屏障指令的前和后所法出的内存操作，执行一个排序的约束。也叫内存栅栏 或 栅栏指令。
+
+2、内存屏障能干嘛？
+
+- 阻止屏障两边的指令重排序
+- 写数据时加入屏障，强制将线程私有工作内存的数据刷回主物理内存
+- 读数据时加入屏障，线程私有工作内存的数据失效，重新到主物理内存中获取最新数据
+
+3、内存屏障四大指令
+
+- 在每一个volatile写操作前面加入一个StoreStore屏障
+
+![image-20220417234409349](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220417234409349.png)
+
+- 在每一个volatile写操作后面插入一个StoreLoad屏障
+
+![image-20220417234420272](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220417234420272.png)
+
+- 在每一个volatile读操作后插入一个LoadLoad屏障
+
+![image-20220417234431352](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220417234431352.png)
+
+- 在每一个volatile读操作后插入一个LoadStore屏障
+
+![image-20220417234442040](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220417234442040.png)
+
+3、凭什么我们java写了一个volatile关键字，系统底层加入内存屏障？两者关系怎么勾搭上的？
+
+- 字节码层面
+
+![image-20220417234542954](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220417234542954.png)
+
+- 关键字
+
+![image-20220417234605164](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220417234605164.png)
+
+4、volatile的可见性
+
+![image-20220417234631996](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220417234631996.png)
+
+5、volatile禁重排
+
+写指令
+
+![image-20220417234709701](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220417234709701.png)
+
+读指令
+
+![image-20220417234748508](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220417234748508.png)
+
+6、对比Lock来理解
+
+![image-20220417234817008](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220417234817008.png)
+
+7、一句话总结
+
+![image-20220417234907496](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220417234907496.png)
