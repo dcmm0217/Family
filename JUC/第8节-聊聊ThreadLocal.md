@@ -562,3 +562,73 @@ line2调用set()方法后新建一个Entry，通过源码可知Entry对象里的
 
 ![image-20220426234435978](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220426234435978.png)
 
+为什么源码要用弱引用？
+
+当function01方法执行完后，栈帧销毁强引用tl也就没有了。但此时线程的ThreadLocalMap里某个Entry的key还指向这个对象。
+
+若这个key是强引用，就会导致key指向ThreadLocal对象及value指向的对象不能被GC回收，造成内存泄漏；
+
+若这个key是弱引用，就大概率会减少内存泄漏的问题（**还有一个key为null的雷**）。===使用弱引用，就可以使用ThreadLocal对象在方法执行完毕后顺序被回收且Entry的key引用指向null==
+
+**此后我们调用get,set或remove方法时，就会尝试删除key为null的entry，可以释放value对象所占用的内存。**
+
+> 仅仅是弱引用就完全可以搞定了吗？
+
+让我们从每一步来具体分析一下：
+
+1、当我们为threadLocal变量赋值，实际上就是当前的Entry（threadLocal实例为key，值为value）往这个threadLocalMap中存放。Entry中的key是弱引用，当threadLocal外部强引用被置为null（tl=null），那么系统GC的时候，根据可达性分析，这个threadLocal实例就没有任何一条链路能够引用到它，这个ThreadLocal势必会被回收，这样一来，ThreadLocalMap中就会出现key为null的Entry，就没有办法访问这些key为null的Entry的value，如果当前线程再迟迟不结束的话，这些key为null的Entry的value就会一直存在一条强引用链：
+
+**ThreadRef -> Thread -> ThreadLocalMap -> Entry -> value永远无法回收，造成内存泄漏**
+
+2、当然，如果当前thread运行结束，threadLocal、threadLocalMap，Entry没有引用链可达，在垃圾回收的时候都会被系统进行回收。
+
+3、但在实际使用的中，我们有时候会使用到**线程池**去维护我们的线程，比如在，Executos.newFixedThreadPool()时创建线程的时候，**为了复用线程是不会结束的，所以threadLocal内存泄漏就值得我们小心。**
+
+一句话总结：
+
+==ThreadLocalMap的Entry数组，key为弱引用的ThreadLocal对象，value为线程所携带的值，系统发生GC的时候，弱引用的key会被回收，而强引用的value还是会存在，这样ThreadLocal就出现了key=null的Entry，value是强引用的，如果线程一直存在的话，（采用线程池的情况）就会一直存在这个value，就会产生内存泄漏。==
+
+> key=null的entry，原理解析
+
+![image-20220427191943937](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220427191943937.png)
+
+ThreadLocalMap使用ThreadLocal的弱引用作为key，如果一个ThreadLocal没有外部强引用引用他，那么GC的时候，这个ThreadLocal势必会被回收，这样一来，ThreadLocalMap中就会出现**Key为null的Entry**，就没有办法访问这些key为null的Entry的value，如果当前线程再迟迟不结束的话（比如正好用在线程池）这些key为null的Entry的value就会一直存在强引用链。
+
+虽然是弱引用，保证了key指向的ThreadLocal对象能被及时回收，但是v指向的value对象是需要ThreadLocalMap调用get、set时发现key为null时才会去回收整个entry、value，**因此弱引用不能100%保证内存不泄漏。我们要在不使用某个ThreadLocal对象后，手动调用remove方法来删除它**，尤其时在线程池中，不仅仅时内存泄露的问题，因为线程池中的线程是重复使用的，意味着这个线程的ThreadLocalMap对象也是重复使用的，如果我们不手动调用remove方法，那么后面的线程就有可能获取到上个线程遗留下来的value值，造成Bug。
+
+> set、get方法会去检查所有键值为null的Entry对象
+
+set()
+
+![image-20220427192915031](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220427192915031.png)
+
+get()
+
+![image-20220427193003964](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220427193003964.png)
+
+remove()
+
+![image-20220427193025989](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220427193025989.png)
+
+从前面的set、getEntry、remove方法看出，在threadLocal生命周期里，针对threadLocal存在的内存泄漏问题，都会通过`expungeStaleEntry`，`cleanSomeSlots`,`replaceStaleEntry`这三个方法清理掉key为null的脏entry
+
+结论:
+
+![image-20220427193246527](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220427193246527.png)
+
+## 5、ThreadLocal最佳实践
+
+1、
+
+![image-20220427193552802](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220427193552802.png)
+
+2、用完记得擦屁股（手动调remove()）
+
+## 6、小总结
+
+- ThreadLocal并不解决线程间共享数据的问题
+- ThreadLocal适用于**变量在线程间隔离且在方法间共享的场景**
+- ThreadLocal通过隐式的在不同线程内创建独立实例副本避免了实例线程安全的问题。
+- **每个线程持有一个属于自己的专属Map并维护了ThreadLocal对象与具体实例的映射，该Map由于只有被持有它的线程访问，故不存在线程安全以及锁的问题**
+- ThreadLocalMap的Entry对ThreadLocal的引用为弱引用，避免了ThreadLocal对象无法被回收的问题， + 都会通过`expungeStaleEntry`，`cleanSomeSlots`,`replaceStaleEntry`这三个方法回收键值为null的Entry对象的值（即为具体实例）以及Entry对象本身从而防止内存泄漏，属于安全加固的方法。
+
