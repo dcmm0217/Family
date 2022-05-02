@@ -238,7 +238,7 @@ public class MyObject
 
 ![image-20220501232658334](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220501232658334.png)
 
-> 偏向锁
+##### 1、偏向锁
 
 作用：
 
@@ -378,4 +378,164 @@ public class MyObject
 ```
 
 ![image-20220501234749486](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220501234749486.png)
+
+##### 2、轻量级锁
+
+有线程来参与锁得竞争，但是获取锁得冲突时间极短
+
+本质就是CAS自旋
+
+![image-20220502232926233](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220502232926233.png)
+
+轻量级锁是为了在**线程近乎交替执行同步块时提高性能**。
+
+主要目的： 在没有多线程竞争的前提下，通过CAS减少重量级锁使用操作系统互斥量产生的性能消耗，说白了先自旋再阻塞。
+
+升级时机： 当关闭偏向锁功能或多线程竞争偏向锁会导致偏向锁升级为轻量级锁
+
+
+
+假如线程A已经拿到锁，这时线程B又来抢该对象的锁，由于该对象的锁已经被线程A拿到，当前该锁已是偏向锁了。
+
+而线程B在争抢时发现对象头Mark Word中的线程ID不是线程B自己的线程ID(而是线程A)，那线程B就会进行CAS操作希望能获得锁。
+
+**此时线程B操作中有两种情况：**
+
+- 如果锁获取成功，直接替换Mark Word中的线程ID为B自己的ID(A → B)，重新偏向于其他线程(即将偏向锁交给其他线程，相当于当前线程"被"释放了锁)，该锁会保持偏向锁状态，A线程Over，B线程上位；
+
+![image-20220502233147366](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220502233147366.png)
+
+- 如果锁获取失败，则偏向锁升级为轻量级锁，此时轻量级锁由原持有偏向锁的线程持有，继续执行其同步代码，而正在竞争的线程B会进入自旋等待获得该轻量级锁。
+
+![image-20220502233157271](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220502233157271.png)
+
+如果关闭偏向锁，线程会直接进入轻量级锁状态
+
+```
+-XX:UseBiasedLocking
+```
+
+自旋到一定次数和程度:
+
+java6之前，默认情况下是自旋10次  -XX:preBlockSpin = 10 来修改   或者是自旋线程超过了CPU核数得一半
+
+java6之后，出现了自适应自旋，自适应意味着自旋得次数不是固定不变的，而是根据 ,同一个锁上一次自旋的时间，和拥有锁线程的状态来决定的。
+
+> 轻量级锁和偏向锁的不同
+
+争夺轻量级锁失败时，自旋尝试抢占锁
+
+轻量级锁每次退出同步块都需要释放锁，而偏向锁是在竞争发生时才释放锁
+
+##### 3、重量级锁
+
+有大量的线程参与锁的竞争，冲突性很高
+
+![image-20220502233927976](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220502233927976.png)
+
+![image-20220502233936041](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220502233936041.png)
+
+#### 4、总结
+
+各种锁的优缺点、Synchronized锁升级和实现原理
+
+![image-20220502234024965](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220502234024965.png)
+
+synchronized锁升级过程总结：一句话，就是先自旋，不行再阻塞。
+
+实际上是把之前的悲观锁(重量级锁)变成在一定条件下使用偏向锁以及使用轻量级(自旋锁CAS)的形式
+
+synchronized在修饰方法和代码块在字节码上实现方式有很大差异，但是内部实现还是基于对象头的MarkWord来实现的。
+
+JDK1.6之前synchronized使用的是重量级锁，JDK1.6之后进行了优化，拥有了无锁->偏向锁->轻量级锁->重量级锁的升级过程，而不是无论什么情况都使用重量级锁。
+
+**偏向锁:适用于单线程适用的情况，在不存在锁竞争的时候进入同步方法/代码块则使用偏向锁。**
+
+**轻量级锁：适用于竞争较不激烈的情况(这和乐观锁的使用范围类似)， 存在竞争时升级为轻量级锁，轻量级锁采用的是自旋锁，如果同步方法/代码块执行时间很短的话，采用轻量级锁虽然会占用cpu资源但是相对比使用重量级锁还是更高效。**
+
+**重量级锁：适用于竞争激烈的情况，如果同步方法/代码块执行时间很长，那么使用轻量级锁自旋带来的性能消耗就比使用重量级锁更严重，这时候就需要升级为重量级锁。**
+
+## 5、JIT编译器对锁的优化
+
+JIT：Just in Time Compiler，一般翻译为即时编译器
+
+锁消除： 类似线程本地变量（每个线程锁自己的，根没锁一样）
+
+```java
+/**
+ * 锁消除
+ * 从JIT角度看相当于无视它，synchronized (o)不存在了,这个锁对象并没有被共用扩散到其它线程使用，
+ * 极端的说就是根本没有加这个锁对象的底层机器码，消除了锁的使用
+ */
+public class LockClearUPDemo
+{
+    static Object objectLock = new Object();//正常的
+
+    public void m1()
+    {
+        //锁消除,JIT会无视它，synchronized(对象锁)不存在了。不正常的
+        Object o = new Object();
+
+        synchronized (o)
+        {
+            System.out.println("-----hello LockClearUPDemo"+"\t"+o.hashCode()+"\t"+objectLock.hashCode());
+        }
+    }
+
+    public static void main(String[] args)
+    {
+        LockClearUPDemo demo = new LockClearUPDemo();
+
+        for (int i = 1; i <=10; i++) {
+            new Thread(() -> {
+                demo.m1();
+            },String.valueOf(i)).start();
+        }
+    }
+}
+```
+
+锁粗化：前后相邻的都是同一个锁对象，编译器会自己加粗锁范围
+
+```java
+/**
+ * 锁粗化
+ * 假如方法中首尾相接，前后相邻的都是同一个锁对象，那JIT编译器就会把这几个synchronized块合并成一个大块，
+ * 加粗加大范围，一次申请锁使用即可，避免次次的申请和释放锁，提升了性能
+ */
+public class LockBigDemo
+{
+    static Object objectLock = new Object();
+
+
+    public static void main(String[] args)
+    {
+        new Thread(() -> {
+            synchronized (objectLock) {
+                System.out.println("11111");
+            }
+            synchronized (objectLock) {
+                System.out.println("22222");
+            }
+            synchronized (objectLock) {
+                System.out.println("33333");
+            }
+        },"a").start();
+
+        new Thread(() -> {
+            synchronized (objectLock) {
+                System.out.println("44444");
+            }
+            synchronized (objectLock) {
+                System.out.println("55555");
+            }
+            synchronized (objectLock) {
+                System.out.println("66666");
+            }
+        },"b").start();
+
+    }
+}
+
+```
 
