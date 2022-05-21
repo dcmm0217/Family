@@ -228,3 +228,143 @@ QQ内推可能认识的人
 
 ![image-20220509222349121](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220509222349121.png)
 
+## 6、Zset类型
+
+向有序集合里面加入一个元素和该元素的分数
+
+添加元素  
+
+```
+zadd key score member[score member ...]
+```
+
+按照元素分数从小到大的顺序，返回索引从start到stop之间的所有元素
+
+```
+zrange key start stop [withscores]
+```
+
+获取元素的分数
+
+```
+zscore key member
+```
+
+删除元素
+
+```
+zrem key member [member ...]
+```
+
+获取指定分数范围的元素
+
+```
+zrangebyscore key min max [withscores offset count]
+```
+
+新增某个元素的分数
+
+```
+zincrby key increment member
+```
+
+获取集合中元素的数量
+
+```
+zcard key 
+```
+
+获取指定分数范围内元素的个数
+
+```
+zcount key min max
+```
+
+按照排名范围删除元素
+
+```
+zremrangebyrank key start stop
+```
+
+获取元素的排名
+
+```
+从小到大
+zrank key member
+从大到小
+zrerank key member
+```
+
+> 应用场景：
+
+1、根据商品销售对商品进行排序显示
+
+思路：定义商品销售排行榜(sorted set集合)，key为goods:sellsort，分数为商品销售数量。
+
+![image-20220521224914781](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220521224914781.png)
+
+2、抖音热搜
+
+![image-20220521225251811](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220521225251811.png)
+
+1、点击视频
+
+```
+zincrby hotvcr:20200919 1 八佰
+zincrby hotvcr:20200919 15 八佰 2 花木兰
+```
+
+2、展示当日排行前10条
+
+```
+ZREVRANGE hotvcr:20200919 0 9 withscores
+```
+
+案例实战02：微信文章阅读统计量
+
+- 需求
+
+![image-20220521225540668](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220521225540668.png)
+
+- 代码
+
+```java
+@RestController
+@Slf4j
+@Api(description = "喜欢的文章接口")
+public class ArticleController
+{
+    @Resource
+    private ArticleService articleService;
+
+    @ApiOperation("喜欢的文章，点一次加一个喜欢")
+    @RequestMapping(value ="/view/{articleId}", method = RequestMethod.POST)
+    public void likeArticle(@PathVariable(name="articleId") String articleId)
+    {
+        articleService.likeArticle(articleId);
+    }
+}
+```
+
+```java
+@Service
+@Slf4j
+public class ArticleService
+{
+    public static final String ARTICLE = "article:";
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
+    public void likeArticle(String articleId)
+    {
+        String key = ARTICLE+articleId;
+        Long likeNumber = stringRedisTemplate.opsForValue().increment(key);
+        log.info("文章编号:{},喜欢数:{}",key,likeNumber);
+    }
+}
+```
+
+- 结论
+
+中小厂可以用，QPS特别高的大厂不可以用。（why）
+
