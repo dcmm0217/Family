@@ -654,8 +654,404 @@ bitop
 
 ![image-20220523232122141](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220523232122141.png)
 
+
+
 #### 2、hyperloglog
+
+互联网统计常用名词解释
+
+什么是UV：
+
+​	unique visitor ： 独立访客，一般理解为客户端IP，需要去重考虑
+
+什么是PV：
+
+​	page View 页面浏览量，不用去重
+
+什么是DAU：
+
+​	daily active user ：日活跃用户量，登录或者使用了某个产品的用户数（去重登录的用户），常用于反映网站、互联网应用或者是网络游戏的运营情况
+
+什么是MAU：
+
+​	monthly active user：月活跃量
+
+
+
+需求：
+
+- 统计某个网站的UV，统计某个文章的UV
+- 用户搜索网站关键词的数量
+- 统计用户每天搜索不同词条个数
+
+> hyperloglog是什么？
+
+去重复统计功能的基数估计算法-就是hyperloglog
+
+![image-20220525232951840](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220525232951840.png)
+
+> 什么叫基数？
+
+​	是一种数据集，去重复后的真实个数就叫基数
+
+![image-20220525233040369](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220525233040369.png)
+
+基数统计：用于统计一个集合中不重复的元素个数，就是对集合去重复后剩余元素的计算
+
+一句话：去重脱水后的真实数据
+
+> hyperloglog如何做的？如何演化出来的？
+
+基数统计就是用hyperloglog
+
+去重复统计你会想到哪些方式？
+
+1、java - HashSet
+
+2、bitmap
+
+如果数据显较大亿级统计,使用bitmaps同样会有这个问题。
+
+bitmap是通过用位bit数组来表示各元素是否出现，每个元素对应一位，所需的总内存为N个bit。
+
+基数计数则将每一个元素对应到bit数组中的其中一位，比如bit数组010010101(按照从零开始下标，有的就是1、4、6、8)。
+新进入的元素只需要将已经有的bit数组和新加入的元素进行按位或计算就行。这个方式能大大减少内存占用且位操作迅速。
+
+But，假设一个样本案例就是一亿个基数位值数据，一个样本就是一亿
+
+**如果要统计1亿个数据的基数位值,大约需要内存100000000/8/1024/1024约等于12M,内存减少占用的效果显著。**
+
+这样得到统计一个对象样本的基数值需要12M。
+
+**如果统计10000个对象样本(1w个亿级),就需要117.1875G将近120G，可见使用bitmaps还是不适用大数据量下(亿级)的基数计数场景，但是bitmaps方法是精确计算的。**
+
+结论：样本元素越多越内存消耗急剧增大，难以管控+各种慢，对于亿级统计不太适合，大数据害死人。
+
+办法？概率算法？
+
+==通过牺牲准确率来换取空间，对于不要求绝对准确率的场景下可以使用，因为概率算法不直接存储数据本身，
+通过一定的概率统计方法预估基数值，同时保证误差在一定范围内，由于又不储存数据故此可以大大节约内存。==
+
+**HyperLogLog就是一种概率算法的实现。**
+
+> 原理说明
+
+只是进行不重复得基数统计，不是集合也不保存数据，只记录数量而不是具体内容。
+
+有误差：
+
+​	非精确统计，牺牲准确率来换取空间，误差仅仅是0.81%左右
+
+这个误差如何来的？
+
+​	Redis之父的回答：
+
+![image-20220526000600513](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220526000600513.png)
+
+经典面试题：
+
+​	为什么redis集群的最大槽数是16384个？
+
+​	Redis集群并没有使用一致性hash而是引入了哈希槽的概念。Redis 集群有16384个哈希槽，每个key通过CRC16校验后对16384取模来决定放置哪个槽，集群的每个节点负责一部分hash槽。但为什么哈希槽的数量是16384（2^14）个呢？
+
+CRC16算法产生的hash值有16bit，该算法可以产生2^16=65536个值。
+换句话说值是分布在0~65535之间。那作者在做mod运算的时候，为什么不mod65536，而选择mod16384？
+
+回答：
+
+```
+正常的心跳数据包带有节点的完整配置，可以用幂等方式用旧的节点替换旧节点，以便更新旧的配置。
+这意味着它们包含原始节点的插槽配置，该节点使用2k的空间和16k的插槽，但是会使用8k的空间（使用65k的插槽）。同时，由于其他设计折衷，Redis集群不太可能扩展到1000个以上的主节点。
+因此16k处于正确的范围内，以确保每个主机具有足够的插槽，最多可容纳1000个矩阵，但数量足够少，可以轻松地将插槽配置作为原始位图传播。请注意，在小型群集中，位图将难以压缩，因为当N较小时，位图将设置的slot / N位占设置位的很大百分比。
+```
+
+![image-20220526000920340](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220526000920340.png)
+
+(1)如果槽位为65536，发送心跳信息的消息头达8k，发送的心跳包过于庞大。
+在消息头中最占空间的是myslots[CLUSTER_SLOTS/8]。 当槽位为65536时，这块的大小是: 65536÷8÷1024=8kb 
+因为每秒钟，redis节点需要发送一定数量的ping消息作为心跳包，如果槽位为65536，这个ping消息的消息头太大了，浪费带宽。
+
+(2)redis的集群主节点数量基本不可能超过1000个。
+集群节点越多，心跳包的消息体内携带的数据越多。如果节点过1000个，也会导致网络拥堵。因此redis作者不建议redis cluster节点数量超过1000个。 那么，对于节点数在1000以内的redis cluster集群，16384个槽位够用了。没有必要拓展到65536个。
+
+(3)槽位越小，节点少的情况下，压缩比高，容易传输
+Redis主节点的配置信息中它所负责的哈希槽是通过一张bitmap的形式来保存的，在传输过程中会对bitmap进行压缩，但是如果bitmap的填充率slots / N很高的话(N表示节点数)，bitmap的压缩率就很低。 如果节点数很少，而哈希槽数量很多的话，bitmap的压缩率就很低。 
+
+> 基本命令
+
+![image-20220526001021737](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220526001021737.png)
+
+![image-20220526001029291](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220526001029291.png)
+
+> 实战案例：天猫网站首页亿级UV的Redis统计方案
+
+需求：
+
+UV的统计需要去重，一个用户一天内的多次访问只能算作一次
+
+淘宝、天猫首页的UV，平均每天是1-1.5亿左右
+
+每天存1.5个亿的IP，访问者来了后先去查是否存在，不存在加入
+
+方案讨论：
+
+​	用mysql -不行，亿级，不合适
+
+​	用redis的hash结构存储
+
+![image-20220526001347440](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220526001347440.png)
+
+redis——hash = <keyDay,<ip,1>>
+
+按照ipv4的结构来说明，每个ipv4的地址最多是15个字节(ip = "192.168.111.1"，最多xxx.xxx.xxx.xxx)
+
+某一天的1.5亿 * 15个字节= 2G，一个月60G，redis死定了
+
+​	用hyperloglog
+
+![image-20220526001516041](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220526001516041.png)
+
+HyperLogLogController
+
+```java
+@Api(description = "案例实战总03:天猫网站首页亿级UV的Redis统计方案")
+@RestController
+@Slf4j
+public class HyperLogLogController
+{
+
+    @Resource
+    private RedisTemplate redisTemplate;
+
+    @ApiOperation("获得ip去重复后的首页访问量，总数统计")
+    @RequestMapping(value = "/uv",method = RequestMethod.GET)
+    public long uv()
+    {
+        //pfcount
+        return redisTemplate.opsForHyperLogLog().size("hll");
+    }
+}
+```
+
+hyperloglogService
+
+```java
+@Service
+@Slf4j
+public class HyperLogLogService {
+    @Resource
+    private RedisTemplate redisTemplate;
+
+    /**
+     * 模拟有用户来点击首页，每个用户就是不同的ip，不重复记录，重复不记录
+     */
+    //@PostConstruct
+    public void init() {
+        log.info("------模拟后台有用户点击，每个用户ip不同");
+        //自己启动线程模拟，实际上产不是线程
+        new Thread(() -> {
+            String ip = null;
+            Random random = new Random();
+            for (int i = 1; i <= 200; i++) {
+
+                ip = random.nextInt(255) + "." + random.nextInt(255) + "." + random.nextInt(255) + "." + random.nextInt(255);
+
+                Long hll = redisTemplate.opsForHyperLogLog().add("hll", ip);
+                log.info("ip={},该ip访问过的次数={}", ip, hll);
+                //暂停3秒钟线程
+                try {
+                    TimeUnit.SECONDS.sleep(3);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }, "t1").start();
+    }
+}
+```
 
 
 
 #### 3、GEO
+
+地理位置知识简介
+
+移动互联网时代LBS应用越来越多，交友软件中附近的小姐姐、外卖软件中附近的美食店铺、打车软件附近的车辆等等，那这种附近各种形形色色的XXX地址位置选择是如何实现的？
+
+地球上的地理位置是使用二维的经纬度表示，经度范围 (-180, 180]，纬度范围 (-90, 90]，只要我们确定一个点的经纬度就可以名曲他在地球的位置。
+
+例如滴滴打车，最直观的操作就是实时记录更新各个车的位置，
+
+然后当我们要找车时，在数据库中查找距离我们(坐标x0,y0)附近r公里范围内部的车辆
+
+使用如下SQL即可：
+
+select taxi from position where x0-r < x < x0 + r and y0-r < y < y0+r
+
+但是这样会有什么问题呢？
+1.查询性能问题，如果并发高，数据量大这种查询是要搞垮数据库的
+
+2.这个查询的是一个矩形访问，而不是以我为中心r公里为半径的圆形访问。
+
+3.精准度的问题，我们知道地球不是平面坐标系，而是一个圆球，这种矩形计算在长距离计算时会有很大误差
+
+
+
+所以Redis在3.2版本以后添加对地理位置的处理
+
+> 原理
+
+![image-20220526001837517](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220526001837517.png)
+
+> 命令
+
+```
+geoadd 多个经度(longitude)、纬度(latitude)、位置名称(member) 添加到指定的key中
+
+geopos 从键里面返回所有给定位置元素得的位置（经度和纬度）
+
+geodist 返回给定2个位置之间的距离
+
+georadius 以给定的经纬度为中心，返回与中心距离不超过给定最大距离的所有位置元素
+
+georadiusbymember georadius类似
+
+geohash 返回一个或多个位置元素的geohash表示
+```
+
+> 命令实操
+
+geoadd添加经纬度坐标
+
+![image-20220526002509143](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220526002509143.png)
+
+GEOADD city 116.403963 39.915119 "天安门" 116.403414 39.924091 "故宫" 116.024067 40.362639 "长城"
+
+中文乱码处理
+
+redis-cli --raw
+
+geopos返回经纬度
+
+![image-20220526002608435](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220526002608435.png)
+
+geohash返回坐标的geohash表示
+
+geohash算法生成base32位编码值，3维-2维-1维-二进制base32位编码
+
+geodist两个位置之间距离
+
+![image-20220526002809906](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220526002809906.png)
+
+georadius 以半斤为中心，查找附近的xxxx
+
+georadius 以给定的经纬度为中心， 返回键包含的位置元素当中， 与中心的距离不超过给定最大距离的所有位置元素。
+
+GEORADIUS city 116.418017 39.914402 10 km withdist withcoord count 10 withhash desc
+
+```
+WITHDIST: 在返回位置元素的同时， 将位置元素与中心之间的距离也一并返回。 距离的单位和用户给定的范围单位保持一致。
+WITHCOORD: 将位置元素的经度和维度也一并返回。
+WITHHASH: 以 52 位有符号整数的形式， 返回位置元素经过原始 geohash 编码的有序集合分值。 这个选项主要用于底层应用或者调试， 实际中的作用并不大
+COUNT 限定返回的记录数。
+```
+
+![image-20220526002911815](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220526002911815.png)
+
+georadiusbymember
+
+![image-20220526002951523](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220526002951523.png)
+
+> 案例实战，美团地图位置附近酒店推送
+
+需求分析：
+
+![image-20220526003029859](https://mygiteepic.oss-cn-shenzhen.aliyuncs.com/img/image-20220526003029859.png)
+
+架构设计：
+
+Redis的新类型GEO
+
+编码实现：
+
+关键点：使用georadius 给定经纬度，找出某一半径内的元素
+
+```java
+@RestController
+public class GeoController
+{
+    public  static final String CITY ="city";
+
+    @Autowired
+    private RedisTemplate redisTemplate;
+
+    @ApiOperation("新增天安门故宫长城经纬度")
+    @RequestMapping(value = "/geoadd",method = RequestMethod.POST)
+    public String geoAdd()
+    {
+        Map<String, Point> map= new HashMap<>();
+        map.put("天安门",new Point(116.403963,39.915119));
+        map.put("故宫",new Point(116.403414 ,39.924091));
+        map.put("长城" ,new Point(116.024067,40.362639));
+
+        redisTemplate.opsForGeo().add(CITY,map);
+
+        return map.toString();
+    }
+
+    @ApiOperation("获取地理位置的坐标")
+    @RequestMapping(value = "/geopos",method = RequestMethod.GET)
+    public Point position(String member) {
+        //获取经纬度坐标
+        List<Point> list= this.redisTemplate.opsForGeo().position(CITY,member);
+        return list.get(0);
+    }
+
+    @ApiOperation("geohash算法生成的base32编码值")
+    @RequestMapping(value = "/geohash",method = RequestMethod.GET)
+    public String hash(String member) {
+        //geohash算法生成的base32编码值
+        List<String> list= this.redisTemplate.opsForGeo().hash(CITY,member);
+        return list.get(0);
+    }
+
+    @ApiOperation("计算两个位置之间的距离")
+    @RequestMapping(value = "/geodist",method = RequestMethod.GET)
+    public Distance distance(String member1, String member2) {
+        Distance distance= this.redisTemplate.opsForGeo().distance(CITY,member1,member2, RedisGeoCommands.DistanceUnit.KILOMETERS);
+        return distance;
+    }
+
+    /**
+     * 通过经度，纬度查找附近的
+     * 北京王府井位置116.418017,39.914402,这里为了方便讲课，故意写死
+     */
+    @ApiOperation("通过经度，纬度查找附近的")
+    @RequestMapping(value = "/georadius",method = RequestMethod.GET)
+    public GeoResults radiusByxy() {
+        //这个坐标是北京王府井位置
+        Circle circle = new Circle(116.418017, 39.914402, Metrics.MILES.getMultiplier());
+        //返回50条
+        RedisGeoCommands.GeoRadiusCommandArgs args = RedisGeoCommands.GeoRadiusCommandArgs.newGeoRadiusArgs().includeDistance().includeCoordinates().sortAscending().limit(10);
+        GeoResults<RedisGeoCommands.GeoLocation<String>> geoResults= this.redisTemplate.opsForGeo().radius(CITY,circle, args);
+        return geoResults;
+    }
+
+    /**
+     * 通过地方查找附近
+     */
+    @ApiOperation("通过地方查找附近")
+    @RequestMapping(value = "/georadiusByMember",method = RequestMethod.GET)
+    public GeoResults radiusByMember() {
+        String member="天安门";
+        //返回50条
+        RedisGeoCommands.GeoRadiusCommandArgs args = RedisGeoCommands.GeoRadiusCommandArgs.newGeoRadiusArgs().includeDistance().includeCoordinates().sortAscending().limit(10);
+        //半径10公里内
+        Distance distance=new Distance(10, Metrics.KILOMETERS);
+        GeoResults<RedisGeoCommands.GeoLocation<String>> geoResults= this.redisTemplate.opsForGeo().radius(CITY,member, distance,args);
+        return geoResults;
+    }
+}
+
+```
+
