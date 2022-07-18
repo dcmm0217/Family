@@ -19,4 +19,10 @@ public class ClientTest {
 
         client.close();
     }
+
+    public static RestHighLevelClient getClient(){
+        return new RestHighLevelClient(
+                RestClient.builder(new HttpHost("localhost",9200,"http"))
+        );
+    }
 }
