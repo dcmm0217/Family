@@ -13,6 +13,8 @@ import org.elasticsearch.client.indices.GetIndexResponse;
 import java.io.IOException;
 
 /**
+ * 测试es索引操作
+ *
  * @author huangw
  * @date 2022/7/17 14:02
  */
