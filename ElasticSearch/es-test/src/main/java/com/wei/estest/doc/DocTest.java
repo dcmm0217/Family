@@ -35,8 +35,8 @@ public class DocTest {
 //        queryDoc(client);
 //        deleteDoc(client);
 
-//        insert_batch(client);
-        insert_delete(client);
+//        deleteDoc(client);
+        insertDelete(client);
         client.close();
     }
 
