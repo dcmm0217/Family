@@ -121,7 +121,7 @@ public class DocTest {
      * @param client
      * @throws IOException
      */
-    public static void insert_batch(RestHighLevelClient client) throws IOException {
+    public static void insertBatch(RestHighLevelClient client) throws IOException {
         BulkRequest request = new BulkRequest();
         request.add(new IndexRequest("user").id("1001").source(XContentType.JSON, "name", "zhangsan"));
         request.add(new IndexRequest("user").id("1002").source(XContentType.JSON, "name", "lisi"));
@@ -139,7 +139,7 @@ public class DocTest {
      * @param client
      * @throws IOException
      */
-    public static void insert_delete(RestHighLevelClient client) throws IOException {
+    public static void insertDelete(RestHighLevelClient client) throws IOException {
         BulkRequest request = new BulkRequest();
         request.add(new DeleteRequest("user").id("1001"));
         request.add(new DeleteRequest("user").id("1002"));
