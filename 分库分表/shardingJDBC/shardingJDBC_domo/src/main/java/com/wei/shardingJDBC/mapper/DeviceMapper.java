@@ -1,7 +1,7 @@
-package com.wei.shardingjdbc_domo.mapper;
+package com.wei.shardingJDBC.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.wei.shardingjdbc_domo.entity.TbDevice;
+import com.wei.shardingJDBC.entity.TbDevice;
 import org.apache.ibatis.annotations.Mapper;
 
 

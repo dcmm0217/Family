@@ -1,8 +1,8 @@
-package com.wei.shardingjdbc_domo;
+package com.wei.shardingJDBC;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.wei.shardingjdbc_domo.entity.TbDevice;
-import com.wei.shardingjdbc_domo.mapper.DeviceMapper;
+import com.wei.shardingJDBC.entity.TbDevice;
+import com.wei.shardingJDBC.mapper.DeviceMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
@@ -26,22 +26,21 @@ class ShardingJdbcDomoApplicationTests {
     }
 
     @Test
-    void testQueryById(){
+    void testQueryById() {
         LambdaQueryWrapper<TbDevice> lambdaQueryWrapper = new LambdaQueryWrapper<>();
-        lambdaQueryWrapper.eq(TbDevice::getDeviceId,1);
+        lambdaQueryWrapper.eq(TbDevice::getDeviceId, 1);
         List<TbDevice> tbDeviceList = deviceMapper.selectList(lambdaQueryWrapper);
         System.out.println(tbDeviceList);
     }
 
     @Test
-    void  testQueryRange(){
+    void testQueryRange() {
         LambdaQueryWrapper<TbDevice> lambdaQueryWrapper = new LambdaQueryWrapper<>();
-        lambdaQueryWrapper.between(TbDevice::getDeviceId,1L,10L);
+        lambdaQueryWrapper.between(TbDevice::getDeviceId, 1L, 10L);
         // Inline strategy cannot support this type sharding:RangeRouteValue
         List<TbDevice> tbDeviceList = deviceMapper.selectList(lambdaQueryWrapper);
         System.out.println(tbDeviceList);
     }
-
 
 
 }

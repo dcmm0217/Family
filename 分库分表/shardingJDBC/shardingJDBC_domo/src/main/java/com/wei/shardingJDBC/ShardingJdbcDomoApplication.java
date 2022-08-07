@@ -1,4 +1,4 @@
-package com.wei.shardingjdbc_domo;
+package com.wei.shardingJDBC;
 
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;

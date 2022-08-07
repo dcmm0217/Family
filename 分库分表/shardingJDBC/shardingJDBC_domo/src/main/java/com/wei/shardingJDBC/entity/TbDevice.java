@@ -1,4 +1,4 @@
-package com.wei.shardingjdbc_domo.entity;
+package com.wei.shardingJDBC.entity;
 
 import lombok.Data;
 
