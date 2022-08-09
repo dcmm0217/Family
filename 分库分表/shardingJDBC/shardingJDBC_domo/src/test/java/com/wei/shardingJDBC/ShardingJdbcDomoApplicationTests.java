@@ -3,6 +3,7 @@ package com.wei.shardingJDBC;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.wei.shardingJDBC.entity.TbDevice;
 import com.wei.shardingJDBC.mapper.DeviceMapper;
+import org.apache.shardingsphere.api.hint.HintManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
@@ -49,7 +50,15 @@ class ShardingJdbcDomoApplicationTests {
         lambdaQueryWrapper.eq(TbDevice::getDeviceType,5);
         List<TbDevice> tbDeviceList = deviceMapper.selectList(lambdaQueryWrapper);
         System.out.println(tbDeviceList);
+    }
 
+    @Test
+    void testHint(){
+        HintManager hintManager = HintManager.getInstance();
+        // 强制路由 tb_device_0表
+        hintManager.addTableShardingValue("tb_device",0);
+        List<TbDevice> tbDeviceList = deviceMapper.selectList(null);
+        System.out.println(tbDeviceList);
     }
 
 
