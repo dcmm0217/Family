@@ -28,7 +28,7 @@ class ShardingJdbcDomoApplicationTests {
     @Test
     void testQueryById() {
         LambdaQueryWrapper<TbDevice> lambdaQueryWrapper = new LambdaQueryWrapper<>();
-        lambdaQueryWrapper.eq(TbDevice::getDeviceId, 1);
+        lambdaQueryWrapper.eq(TbDevice::getDeviceId, 1L);
         List<TbDevice> tbDeviceList = deviceMapper.selectList(lambdaQueryWrapper);
         System.out.println(tbDeviceList);
     }

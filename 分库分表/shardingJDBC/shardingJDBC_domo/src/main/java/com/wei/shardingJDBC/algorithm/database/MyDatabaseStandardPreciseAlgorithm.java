@@ -6,6 +6,8 @@ import org.apache.shardingsphere.api.sharding.standard.PreciseShardingValue;
 import java.util.Collection;
 
 /**
+ * 精确分库策略
+ *
  * @author huangw
  * @date 2022/8/7 23:24
  */
@@ -19,8 +21,8 @@ public class MyDatabaseStandardPreciseAlgorithm implements PreciseShardingAlgori
         String columnName = preciseShardingValue.getColumnName();
         // 分片键的值
         Long value = preciseShardingValue.getValue();
-        String databaseName = "ds" + (value%2);
-        if (!collection.contains(databaseName)){
+        String databaseName = "ds" + (value % 2);
+        if (!collection.contains(databaseName)) {
             throw new UnsupportedOperationException("数据源" + databaseName + "不存在");
         }
         return databaseName;
