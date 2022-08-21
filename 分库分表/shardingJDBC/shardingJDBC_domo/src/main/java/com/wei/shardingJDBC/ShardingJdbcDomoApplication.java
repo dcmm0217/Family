@@ -5,7 +5,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-@MapperScan("com.wei.shardingjdbc_domo.mapper")
+@MapperScan("com.wei.shardingJDBC.mapper")
 public class ShardingJdbcDomoApplication {
 
     public static void main(String[] args) {
