@@ -13,3 +13,6 @@
 #### 6、Lombok（注解生产set/get方法）
 
 #### 7、String Manipulation(字符串处理神器)
+
+#### 8、PlantUML Integration(作图插件)
+
