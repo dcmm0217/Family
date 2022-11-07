@@ -423,7 +423,206 @@ public enum RedisKeyGeneTypeEnum {
 
 线程池第一个版本：
 
+​	自定义线程池
 
+```java
+public class ThreadPoolUtil {
+
+    /**
+     * 获取机器可用线程数 AVALIABLE_PROCESSORS
+     */
+    private final static int AVALIABLE_PROCESSORS = Runtime.getRuntime().availableProcessors();
+
+    private static ThreadPoolExecutor threadPool = new ThreadPoolExecutor(
+            AVALIABLE_PROCESSORS,
+            AVALIABLE_PROCESSORS * 2,
+            1, TimeUnit.MINUTES,
+            new LinkedBlockingQueue<>(500));
+
+    private static final ExecutorService pool = Executors.newFixedThreadPool(10);
+
+    public static <T> void execute(FutureTask<T> task) {
+        pool.execute(task);
+    }
+
+    public static ThreadPoolExecutor getThreadPool() {
+        return threadPool;
+    }
+}
+```
+
+上线后：因为网络io耗时比较严重，一个推单的耗时会比较长，然后导致的队列直接被打满，而且又采用的是默认的拒绝策略，线上频繁报错告警。
+
+业务使用：==（感觉像是存在问题，但是有没有发现问题）==
+
+```java
+@Override
+protected HtSendResponseDTO doPushDate(WarehousePushDto warehousePushDto) {
+    // 如果是单号数据，忽略其他条件
+    if (StringUtils.isNotBlank(warehousePushDto.getBusinessNo())) {
+        // 可用于定时器和任何业务逻辑中调用
+        WmsOutboundOrder order = wmsOutboundOrderService.getOutboundOrderByNo(warehousePushDto.getBusinessNo());
+        return push(order, warehousePushDto.getBusinessType());
+    } else {
+        // 仅限定时器触发
+        OutboundOrderListParamDto queryListParamDto = new OutboundOrderListParamDto();
+        if (StringUtils.isNotBlank(warehousePushDto.getWhCode())) {
+            queryListParamDto.setWhCodes(Arrays.asList(warehousePushDto.getWhCode()));
+        }
+        if (warehousePushDto.getTimeType() == TimeTypeEnum.CREATED.getType()) {
+            queryListParamDto.setCreatedStartTime(warehousePushDto.getStartTime());
+            queryListParamDto.setCreatedEndTime(warehousePushDto.getEndTime());
+        }
+        queryListParamDto.setSynchStatusList(Arrays.asList(SynchStatusEnum.PENDING.getKey(), SynchStatusEnum.FAIL.getKey()));
+        queryListParamDto.setPageNo(1);
+        queryListParamDto.setPageSize(100);
+        queryListParamDto.setStatus(OutboundStateEnum.WAITING_DELIVERY.getKey());
+        PageInfo<OutboundListVo> pageInfo = wmsOutboundOrderService.queryList(queryListParamDto);
+        if (pageInfo != null && pageInfo.getTotal() > 0) {
+            List<OutboundListVo> outboundList = pageInfo.getList();
+            for (OutboundListVo vo : outboundList) {
+                // 线程池异步推送
+                ThreadPoolUtil.getThreadPool().execute(() -> {
+                    transactionTemplate.execute(new TransactionCallbackWithoutResult() {
+                        @Override
+                        protected void doInTransactionWithoutResult(TransactionStatus transactionStatus) {
+                            try {
+                                WmsOutboundOrder order = new WmsOutboundOrder();
+                                BeanUtils.copyProperties(vo, order);
+                                HtSendResponseDTO responseDTO = push(order, warehousePushDto.getBusinessType());
+                                WarehousePushDto warehousePush = new WarehousePushDto();
+                                BeanUtils.copyProperties(warehousePushDto, warehousePush);
+                                warehousePush.setBusinessNo(order.getOutboundNo());
+                                doAfterPush(responseDTO, warehousePush);
+                            } catch (BeansException e) {
+                                log.error("出库单推送第三方仓处理异常，出库单：" + vo.getOutboundNo(), e);
+                                transactionStatus.setRollbackOnly();
+                            }
+                        }
+                    });
+                });
+            }
+        }
+        return HtSendResponseDTO.success();
+    }
+}
+```
+
+第二版本进行了线程池参数调优：
+
+​	自定义线程池，并对功能进行简单封装，并再使用的时候 **进行了业务隔离**
+
+**第一版本是，所有的单据使用一个线程池，导致推单不及时，回查状态也不及时，任务一直被阻塞造成积压得情况。**
+
+**第二版本进行业务隔离，每一个业务单据使用一个线程池，类似队列的思想，提升消费速率。**	(每一个业务单据一个队列的感觉)
+
+```java
+/**
+ * 线程池管理：<br/>
+ * 1、线程池个数可控<br/>
+ * 2、分类管理，实现任务隔离，方式相互阻塞<br/>
+ * 3、任务去重，防止短时间多次执行
+ */
+public class ThreadPoolUtil {
+
+    private static final ConcurrentHashMap<String, ThreadPoolExecutor> THREADPOOL = new ConcurrentHashMap<>();
+
+    /**
+     * 按照业务进行隔离线程池，当不需要隔离时，使用公共的。<br/>
+     * @param businessKey
+     * @param job
+     */
+    public static void execute(String businessKey, Runnable job) {
+        if (!THREADPOOL.containsKey(businessKey)) {
+            ThreadPoolExecutor pool = new ThreadPoolExecutor(6, 12,10, TimeUnit.MINUTES,
+                    new LinkedBlockingQueue<>(1000), new ThreadPoolExecutor.DiscardPolicy());
+            THREADPOOL.put(businessKey, pool);
+            pool.execute(job);
+            return;
+        }
+        THREADPOOL.get(businessKey).execute(job);
+    }
+
+    /**
+     * 使用公共线程池，没有业务隔离
+     * @param job
+     */
+    public static void executeCommon(Runnable job) {
+        if (!THREADPOOL.containsKey(ThreadPoolConstant.COMMON_KEY)) {
+            ThreadPoolExecutor pool = new ThreadPoolExecutor(5, 10,10, TimeUnit.MINUTES,
+                    new LinkedBlockingQueue<>(5000));
+            THREADPOOL.put(ThreadPoolConstant.COMMON_KEY, pool);
+            pool.execute(job);
+            return;
+        }
+        THREADPOOL.get(ThreadPoolConstant.COMMON_KEY).execute(job);
+    }
+
+}
+```
+
+业务代码使用情况，添加业务标识
+
+```java
+@Override
+    protected HtSendResponseDTO doPushDate(WarehousePushDto warehousePushDto) {
+        // 如果是单号数据，忽略其他条件
+        if (StringUtils.isNotBlank(warehousePushDto.getBusinessNo())) {
+            // 可用于定时器和任何业务逻辑中调用
+            WmsOutboundOrder order = wmsOutboundOrderService.getOutboundOrderByNo(warehousePushDto.getBusinessNo());
+            return push(order, warehousePushDto.getBusinessType());
+        } else {
+            if (SwitchConstant.SWITCH_ON.equals(env.getProperty(CacheConstant.ORDER_JOB_WHCODE_SWITCH, SwitchConstant.SWITCH_ON))
+                    && StringUtils.isBlank(warehousePushDto.getWhCode())) {
+                return HtSendResponseDTO.fail("whCode必须指定");
+            }
+            // 仅限定时器触发
+            OutboundOrderListParamDto queryListParamDto = new OutboundOrderListParamDto();
+            if (StringUtils.isNotBlank(warehousePushDto.getWhCode())) {
+                queryListParamDto.setWhCodes(Arrays.asList(warehousePushDto.getWhCode()));
+            }
+            if (warehousePushDto.getTimeType() == TimeTypeEnum.CREATED.getType()) {
+                queryListParamDto.setCreatedStartTime(warehousePushDto.getStartTime());
+                queryListParamDto.setCreatedEndTime(warehousePushDto.getEndTime());
+            }
+            queryListParamDto.setSynchStatusList(Arrays.asList(SynchStatusEnum.PENDING.getKey(), SynchStatusEnum.FAIL.getKey()));
+            queryListParamDto.setPageNo(1);
+            queryListParamDto.setPageSize(100);
+            queryListParamDto.setStatus(Arrays.asList(OutboundStateEnum.WAITING_SYNCH_WH.getKey()));
+            PageInfo<OutboundListVo> pageInfo = wmsOutboundOrderService.queryList(queryListParamDto);
+            if (pageInfo != null && pageInfo.getTotal() > 0) {
+                List<OutboundListVo> outboundList = pageInfo.getList();
+                for (OutboundListVo vo : outboundList) {
+                    if (SwitchConstant.SWITCH_ON.equals(env.getProperty(CacheConstant.ORDER_JOB_LOCK_SWITCH, SwitchConstant.SWITCH_ON))
+                            && !redisLockUtil.nxLock(CacheConstant.ORDER_JOB_LOCK+vo.getOutboundId(), CacheConstant.ORDER_JOB_LOCK_TIMEOUT)) {
+                        continue;
+                    }
+                    // 线程池异步推送(使用了业务隔离，不同类型的单据使用的队列不同)
+                    ThreadPoolUtil.execute(ThreadPoolConstant.OUTBOUND_CREATE_PREFIX+vo.getSourceWhCode(), () -> {
+                        transactionTemplate.execute(new TransactionCallbackWithoutResult() {
+                            @Override
+                            protected void doInTransactionWithoutResult(TransactionStatus transactionStatus) {
+                                try {
+                                    WmsOutboundOrder order = new WmsOutboundOrder();
+                                    BeanUtils.copyProperties(vo, order);
+                                    HtSendResponseDTO responseDTO = push(order, warehousePushDto.getBusinessType());
+                                    WarehousePushDto warehousePush = new WarehousePushDto();
+                                    BeanUtils.copyProperties(warehousePushDto, warehousePush);
+                                    warehousePush.setBusinessNo(order.getOutboundNo());
+                                    doAfterPush(responseDTO, warehousePush);
+                                } catch (Exception e) {
+                                    log.error("出库单推送第三方仓处理异常，出库单：" + vo.getOutboundNo(), e);
+                                    transactionStatus.setRollbackOnly();
+                                }
+                            }
+                        });
+                    });
+                }
+            }
+            return HtSendResponseDTO.success();
+        }
+    }
+```
 
 
 
