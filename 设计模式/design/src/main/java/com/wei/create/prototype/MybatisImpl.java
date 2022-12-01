@@ -3,6 +3,9 @@ package com.wei.create.prototype;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * 原型模式的实现
+ */
 public class MybatisImpl implements IMyBatis {
 
     // 缓存user，序列化和反序列化-深克隆

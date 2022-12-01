@@ -1,5 +1,8 @@
 package com.wei.create.prototype;
 
+/**
+ * 原型模式的测试
+ */
 public class MainTest {
     public static void main(String[] args) throws CloneNotSupportedException {
         IMyBatis iMyBatis = new MybatisImpl();
