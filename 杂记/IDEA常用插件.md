@@ -16,3 +16,4 @@
 
 #### 8、PlantUML Integration(作图插件)
 
+#### 9、GitToolBox（GIT辅助，自动拉取代码，展示每行commit信息等）
