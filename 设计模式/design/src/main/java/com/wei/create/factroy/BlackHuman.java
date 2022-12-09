@@ -7,10 +7,12 @@ package com.wei.create.factroy;
  * @since 2022-12-01 14:52:12
  */
 public class BlackHuman implements Human {
+    @Override
     public void talk() {
         System.out.println("黑人说话！");
     }
 
+    @Override
     public void getColor() {
         System.out.println("黑人就是黑色的！");
     }
