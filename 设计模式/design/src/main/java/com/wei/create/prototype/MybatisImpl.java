@@ -11,6 +11,7 @@ public class MybatisImpl implements IMyBatis {
     // 缓存user，序列化和反序列化-深克隆
     private Map<String, User> userCache = new HashMap<String, User>();
 
+    @Override
     public User getUserFromDb(String username) throws CloneNotSupportedException {
         System.out.println("从数据库中查到：" + username);
         User user = new User();
@@ -21,6 +22,7 @@ public class MybatisImpl implements IMyBatis {
         return user;
     }
 
+    @Override
     public User getUser(String username) throws CloneNotSupportedException {
         User user = null;
         if (userCache.containsKey(username)) {
