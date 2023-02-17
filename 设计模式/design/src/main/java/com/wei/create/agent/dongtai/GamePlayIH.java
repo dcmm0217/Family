@@ -18,14 +18,20 @@ public class GamePlayIH implements InvocationHandler {
     private Object obj = null;
 
     // 我要代理谁
-    public GamePlayIH( Object obj) {
+    public GamePlayIH(Object obj) {
         this.obj = obj;
     }
 
     // 调用被代理的方法
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        Object invoke = method.invoke(this.obj, args);
         // 返回被代理的对象
-        return method.invoke(this.obj, args);
+
+        // 如果调用了我的登录方法，则发送通知信息
+        if (method.getName().equalsIgnoreCase("login")) {
+            System.out.println("有人在用我的账号登录!");
+        }
+        return invoke;
     }
 }
