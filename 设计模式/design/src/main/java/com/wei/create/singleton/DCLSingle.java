@@ -1,5 +1,11 @@
 package com.wei.create.singleton;
 
+/**
+ * DCL单例模式
+ *
+ * @author huangwei
+ * @since 2023-02-21
+ */
 public class DCLSingle {
 
     // volatile 保证线程之间的内存可见性，防止指令重排
