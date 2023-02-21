@@ -10,7 +10,7 @@ public class SignForThirdService extends SiginService {
         // 2、自动生成默认密码
         // 3、注册-在原来的系统在创建一个用户
         // 4、调用原来的登录方法
-        return loginForRegist(openId, null);
+        return this.loginForRegist(openId, null);
     }
 
     // 微信登录
