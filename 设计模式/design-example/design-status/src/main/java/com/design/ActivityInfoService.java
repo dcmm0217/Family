@@ -1,10 +1,13 @@
 package com.design;
 
+
 import java.util.Date;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
+ * 活动信息服务类
+ *
  * @author huangw
  * @date 2023/4/27 23:28
  */
