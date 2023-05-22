@@ -9,14 +9,16 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>design-status</artifactId>
+    <artifactId>design-xiangyuan</artifactId>
 
-    <name>design-status</name>
+    <name>design-xiangyuan</name>
+
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
     </properties>
+
     <dependencies>
         <dependency>
             <groupId>junit</groupId>
@@ -26,4 +28,17 @@
         </dependency>
     </dependencies>
 
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.1</version>
+                <configuration>
+                    <source>1.8</source> <!-- 源代码版本 -->
+                    <target>1.8</target> <!-- 目标类文件版本 -->
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

@@ -7,9 +7,6 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 
-/**
- * Unit test for simple App.
- */
 public class AppTest {
 
     @Test

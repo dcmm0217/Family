@@ -5,7 +5,7 @@ import com.alibaba.fastjson.JSON;
 import com.design.no.Result;
 import com.design.yes.StateHandler;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 
 /**
