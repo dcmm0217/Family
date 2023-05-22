@@ -5,6 +5,7 @@
     <packaging>pom</packaging>
     <modules>
         <module>design-status</module>
+        <module>design-creater</module>
     </modules>
     <parent>
         <groupId>org.springframework.boot</groupId>
