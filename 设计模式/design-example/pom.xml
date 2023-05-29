@@ -8,6 +8,7 @@
         <module>design-creater</module>
         <module>design-xiangyuan</module>
         <module>design-strategy</module>
+        <module>design-observer</module>
     </modules>
     <parent>
         <groupId>org.springframework.boot</groupId>
