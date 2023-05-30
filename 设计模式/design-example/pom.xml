@@ -9,6 +9,7 @@
         <module>design-xiangyuan</module>
         <module>design-strategy</module>
         <module>design-observer</module>
+        <module>design-zerenlian</module>
     </modules>
     <parent>
         <groupId>org.springframework.boot</groupId>
