@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/address/nacos-address.iml" filepath="$PROJECT_DIR$/address/nacos-address.iml" />
+      <module fileurl="file://$PROJECT_DIR$/nacos-all.iml" filepath="$PROJECT_DIR$/nacos-all.iml" />
+      <module fileurl="file://$PROJECT_DIR$/api/nacos-api.iml" filepath="$PROJECT_DIR$/api/nacos-api.iml" />
+      <module fileurl="file://$PROJECT_DIR$/auth/nacos-auth.iml" filepath="$PROJECT_DIR$/auth/nacos-auth.iml" />
+      <module fileurl="file://$PROJECT_DIR$/client/nacos-client.iml" filepath="$PROJECT_DIR$/client/nacos-client.iml" />
+      <module fileurl="file://$PROJECT_DIR$/cmdb/nacos-cmdb.iml" filepath="$PROJECT_DIR$/cmdb/nacos-cmdb.iml" />
+      <module fileurl="file://$PROJECT_DIR$/common/nacos-common.iml" filepath="$PROJECT_DIR$/common/nacos-common.iml" />
+      <module fileurl="file://$PROJECT_DIR$/config/nacos-config.iml" filepath="$PROJECT_DIR$/config/nacos-config.iml" />
+      <module fileurl="file://$PROJECT_DIR$/consistency/nacos-consistency.iml" filepath="$PROJECT_DIR$/consistency/nacos-consistency.iml" />
+      <module fileurl="file://$PROJECT_DIR$/console/nacos-console.iml" filepath="$PROJECT_DIR$/console/nacos-console.iml" />
+      <module fileurl="file://$PROJECT_DIR$/core/nacos-core.iml" filepath="$PROJECT_DIR$/core/nacos-core.iml" />
+      <module fileurl="file://$PROJECT_DIR$/distribution/nacos-distribution.iml" filepath="$PROJECT_DIR$/distribution/nacos-distribution.iml" />
+      <module fileurl="file://$PROJECT_DIR$/example/nacos-example.iml" filepath="$PROJECT_DIR$/example/nacos-example.iml" />
+      <module fileurl="file://$PROJECT_DIR$/istio/nacos-istio.iml" filepath="$PROJECT_DIR$/istio/nacos-istio.iml" />
+      <module fileurl="file://$PROJECT_DIR$/naming/nacos-naming.iml" filepath="$PROJECT_DIR$/naming/nacos-naming.iml" />
+      <module fileurl="file://$PROJECT_DIR$/test/nacos-test.iml" filepath="$PROJECT_DIR$/test/nacos-test.iml" />
+    </modules>
+  </component>
+</project>
