@@ -10,6 +10,7 @@
         <module>design-strategy</module>
         <module>design-observer</module>
         <module>design-zerenlian</module>
+        <module>design-proxy</module>
     </modules>
     <parent>
         <groupId>org.springframework.boot</groupId>
