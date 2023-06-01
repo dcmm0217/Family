@@ -11,6 +11,7 @@
         <module>design-observer</module>
         <module>design-zerenlian</module>
         <module>design-proxy</module>
+        <module>design-factory-method</module>
     </modules>
     <parent>
         <groupId>org.springframework.boot</groupId>
