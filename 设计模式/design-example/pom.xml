@@ -12,6 +12,7 @@
         <module>design-zerenlian</module>
         <module>design-proxy</module>
         <module>design-factory-method</module>
+        <module>design-abstract-factory</module>
     </modules>
     <parent>
         <groupId>org.springframework.boot</groupId>
